@@ -7,9 +7,9 @@
 extern "C" {
 #endif
 
-#define YDT_ECA_EVENT      0
-#define YDT_ECA_CONDITION  1
-#define YDT_ECA_ACTION     2
+#define YDT_ECA_EVENT 0
+#define YDT_ECA_CONDITION 1
+#define YDT_ECA_ACTION 2
 
 // --- Trigger enumeration ---
 
@@ -43,7 +43,8 @@ __declspec(dllexport) int __cdecl ydt_get_eca_gui_id(int trig_index, int eca_typ
 __declspec(dllexport) int __cdecl ydt_get_eca_param_count(int trig_index, int eca_type, int eca_idx);
 
 // Get parameter value as string (for display / AI consumption)
-__declspec(dllexport) const char* __cdecl ydt_get_eca_param_value(int trig_index, int eca_type, int eca_idx, int param_idx);
+__declspec(dllexport)
+const char* __cdecl ydt_get_eca_param_value(int trig_index, int eca_type, int eca_idx, int param_idx);
 
 // --- ECA Modification API ---
 
@@ -60,7 +61,8 @@ __declspec(dllexport) int __cdecl ydt_set_eca_func_name(int trig_index, int eca_
 __declspec(dllexport) int __cdecl ydt_set_eca_active(int trig_index, int eca_type, int eca_idx, int active);
 
 // Set ECA parameter value.
-__declspec(dllexport) int __cdecl ydt_set_eca_param_value(int trig_index, int eca_type, int eca_idx, int param_idx, const char* value);
+__declspec(dllexport) int __cdecl ydt_set_eca_param_value(int trig_index, int eca_type, int eca_idx, int param_idx,
+                                                          const char* value);
 
 // Add a new ECA node (cloned from existing template of same type). Returns 1 on success.
 __declspec(dllexport) int __cdecl ydt_add_eca(int trig_index, int eca_type);

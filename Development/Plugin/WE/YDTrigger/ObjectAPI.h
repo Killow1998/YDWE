@@ -1,13 +1,13 @@
 #pragma once
 
 // Warcraft III object editor file constants
-#define YDT_OBJ_UNIT    0   // war3map.w3u
-#define YDT_OBJ_ITEM    1   // war3map.w3t
-#define YDT_OBJ_BUFF    2   // war3map.w3b
-#define YDT_OBJ_DOODAD  3   // war3map.w3d
-#define YDT_OBJ_ABILITY 4   // war3map.w3a
-#define YDT_OBJ_HERO    5   // war3map.w3h
-#define YDT_OBJ_UPGRADE 6   // war3map.w3q
+#define YDT_OBJ_UNIT 0    // war3map.w3u
+#define YDT_OBJ_ITEM 1    // war3map.w3t
+#define YDT_OBJ_BUFF 2    // war3map.w3b
+#define YDT_OBJ_DOODAD 3  // war3map.w3d
+#define YDT_OBJ_ABILITY 4 // war3map.w3a
+#define YDT_OBJ_HERO 5    // war3map.w3h
+#define YDT_OBJ_UPGRADE 6 // war3map.w3q
 
 #ifdef __cplusplus
 extern "C" {

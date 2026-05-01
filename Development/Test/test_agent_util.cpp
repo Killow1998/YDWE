@@ -19,9 +19,9 @@ DWORD g_nWEBase = 0x00400000;
 extern "C" {
 void agent_api_add_trigger(DWORD trigger_ptr);
 void agent_api_clear_triggers();
-int  ydt_get_trigger_count(void);
+int ydt_get_trigger_count(void);
 const char* ydt_get_trigger_name(int trig_index);
-int  ydt_get_eca_count(int trig_index, int eca_type);
+int ydt_get_eca_count(int trig_index, int eca_type);
 const char* ydt_get_eca_param_value(int trig_index, int eca_type, int eca_idx, int param_idx);
 }
 
@@ -43,7 +43,7 @@ TEST_CASE("AgentAPI — trigger cache management", "[agent][cache]") {
     // Set up minimal trigger-like structure for name access
     const char* test_name = "TestTrigger";
     mock[0x4C / 4] = (DWORD)test_name; // offset +0x4C = name pointer (simulated)
-    mock[0x0C / 4] = 0; // child count = 0
+    mock[0x0C / 4] = 0;                // child count = 0
 
     agent_api_add_trigger((DWORD)mock);
     REQUIRE(ydt_get_trigger_count() == 1);
@@ -78,7 +78,7 @@ TEST_CASE("AgentAPI — trigger name access with valid pointer", "[agent][name]"
     // return alloc_str((const char*)(g_triggers[trig_index] + 0x4C));
     // This treats offset +0x4C as inline char data (char[260]).
     // So we just put the name directly at +0x4C in our mock:
-    BLZSStrCopy((char*)(mock + 0x4C/4), "MyTestTrigger", 260);
+    BLZSStrCopy((char*)(mock + 0x4C / 4), "MyTestTrigger", 260);
 
     agent_api_add_trigger((DWORD)mock);
     REQUIRE(ydt_get_trigger_count() == 1);
@@ -102,7 +102,7 @@ TEST_CASE("AgentAPI — ring buffer handles long strings", "[agent][ringbuf]") {
 
     // Write a 255-char name (max for trigger name)
     std::string long_name(255, 'A');
-    BLZSStrCopy((char*)(mock + 0x4C/4), long_name.c_str(), 260);
+    BLZSStrCopy((char*)(mock + 0x4C / 4), long_name.c_str(), 260);
 
     agent_api_add_trigger((DWORD)mock);
 
@@ -130,7 +130,8 @@ TEST_CASE("AgentAPI — ring buffer wraps correctly", "[agent][ringbuf]") {
         BLZSStrPrintf(name, 260, "Trigger_%03d_", i);
         int len = (int)BLZSStrLen(name);
         // Fill remaining with 'X' to make ~250 bytes
-        for (int j = len; j < 250; j++) name[j] = 'X';
+        for (int j = len; j < 250; j++)
+            name[j] = 'X';
         name[250] = '\0';
         BLZSStrCopy((char*)(m + 0x4C / 4), name, 260);
         agent_api_add_trigger((DWORD)m);
@@ -151,7 +152,8 @@ TEST_CASE("AgentAPI — ring buffer wraps correctly", "[agent][ringbuf]") {
 
     // Cleanup
     agent_api_clear_triggers();
-    for (auto* m : mocks) HeapFree(GetProcessHeap(), 0, m);
+    for (auto* m : mocks)
+        HeapFree(GetProcessHeap(), 0, m);
 }
 
 TEST_CASE("AgentAPI — out-of-bounds access returns safe values", "[agent][bounds]") {

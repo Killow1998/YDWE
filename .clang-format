@@ -1,0 +1,81 @@
+# YDWE C++ code style configuration
+# Based on CODING_STYLE.md
+---
+Language: Cpp
+Standard: c++20
+
+# Indentation: 4 spaces, no tabs
+UseTab: Never
+IndentWidth: 4
+TabWidth: 4
+
+# No extra indentation for namespaces
+NamespaceIndentation: None
+
+# Line endings: LF
+LineEnding: DeriveLF
+
+# Access modifiers at same indent as class
+AccessModifierOffset: -4
+
+# Braces: attach to namespace/class/function, break for others
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterNamespace: false
+  AfterClass: false
+  AfterFunction: false
+  AfterControlStatement: Never
+  AfterEnum: false
+  AfterStruct: false
+  AfterUnion: false
+  AfterExternBlock: false
+  BeforeCatch: false
+  BeforeElse: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+
+# Pointer alignment: left
+PointerAlignment: Left
+
+# Always break after template<> in declarations
+AlwaysBreakTemplateDeclarations: Yes
+
+# Column limit: reasonable wide
+ColumnLimit: 120
+
+# Spaces
+SpaceAfterCStyleCast: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesInAngles: Never
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# Include sorting
+SortIncludes: Never
+
+# Penalty for breaking various constructs
+PenaltyBreakAssignment: 50
+PenaltyBreakBeforeFirstCallParameter: 30
+PenaltyBreakComment: 100
+PenaltyBreakFirstLessLess: 60
+PenaltyBreakString: 100
+PenaltyExcessCharacter: 10
+
+# Other
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakAfterReturnType: None
+BinPackArguments: true
+BinPackParameters: true
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
+Cpp11BracedListStyle: true
+DerivePointerAlignment: false
+IndentCaseLabels: false
+MaxEmptyLinesToKeep: 1
+ReflowComments: false

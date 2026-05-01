@@ -7,31 +7,46 @@
 // We create temp files with known binary content and verify roundtrip.
 extern "C" {
 const char* __cdecl ydt_read_object_file(const char* file_path);
-int         __cdecl ydt_write_object_file(const char* file_path, const char* json_data);
+int __cdecl ydt_write_object_file(const char* file_path, const char* json_data);
 }
 
 // Build a minimal w3u binary blob in memory
 static std::vector<unsigned char> make_minimal_w3u() {
     std::vector<unsigned char> out;
     auto w32 = [&](DWORD v) {
-        for (int i = 0; i < 4; i++) out.push_back((unsigned char)((v >> (i * 8)) & 0xFF));
+        for (int i = 0; i < 4; i++)
+            out.push_back((unsigned char)((v >> (i * 8)) & 0xFF));
     };
     // Magic "W3U\0"
-    out.push_back('W'); out.push_back('3'); out.push_back('U'); out.push_back(0);
+    out.push_back('W');
+    out.push_back('3');
+    out.push_back('U');
+    out.push_back(0);
     w32(1); // version
     w32(1); // 1 original object
     // Object: id="hfoo"
-    out.push_back('h'); out.push_back('f'); out.push_back('o'); out.push_back('o');
+    out.push_back('h');
+    out.push_back('f');
+    out.push_back('o');
+    out.push_back('o');
     w32(2); // 2 modifications
     // Mod 1: "unam" (name), type=3 (string), value="TestUnit"
-    out.push_back('u'); out.push_back('n'); out.push_back('a'); out.push_back('m');
+    out.push_back('u');
+    out.push_back('n');
+    out.push_back('a');
+    out.push_back('m');
     w32(3);
     const char* name = "TestUnit";
-    for (const char* p = name; *p; p++) out.push_back(*p);
+    for (const char* p = name; *p; p++)
+        out.push_back(*p);
     out.push_back(0);
-    while (out.size() % 4 != 0) out.push_back(0);
+    while (out.size() % 4 != 0)
+        out.push_back(0);
     // Mod 2: "uhab" (health), type=0 (int), value=500
-    out.push_back('u'); out.push_back('h'); out.push_back('a'); out.push_back('b');
+    out.push_back('u');
+    out.push_back('h');
+    out.push_back('a');
+    out.push_back('b');
     w32(0);
     w32(500);
     w32(0); // custom count
@@ -43,7 +58,8 @@ static std::string write_temp(const std::vector<unsigned char>& data) {
     GetTempPathA(MAX_PATH, tmp);
     lstrcatA(tmp, "ydwe_test_w3u.bin");
     HANDLE h = CreateFileA(tmp, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (h == INVALID_HANDLE_VALUE) return "";
+    if (h == INVALID_HANDLE_VALUE)
+        return "";
     DWORD w;
     WriteFile(h, data.data(), (DWORD)data.size(), &w, NULL);
     CloseHandle(h);
@@ -103,23 +119,38 @@ TEST_CASE("ObjectAPI — roundtrip (binary→JSON→binary→JSON)", "[object][r
 TEST_CASE("ObjectAPI — custom objects", "[object][custom]") {
     std::vector<unsigned char> out;
     auto w32 = [&](DWORD v) {
-        for (int i = 0; i < 4; i++) out.push_back((unsigned char)((v >> (i * 8)) & 0xFF));
+        for (int i = 0; i < 4; i++)
+            out.push_back((unsigned char)((v >> (i * 8)) & 0xFF));
     };
 
-    out.push_back('W'); out.push_back('3'); out.push_back('U'); out.push_back(0);
+    out.push_back('W');
+    out.push_back('3');
+    out.push_back('U');
+    out.push_back(0);
     w32(1); // version
     w32(0); // 0 original
     w32(1); // 1 custom
     // Custom: id="h000" base="hfoo"
-    out.push_back('h'); out.push_back('0'); out.push_back('0'); out.push_back('0');
-    out.push_back('h'); out.push_back('f'); out.push_back('o'); out.push_back('o');
+    out.push_back('h');
+    out.push_back('0');
+    out.push_back('0');
+    out.push_back('0');
+    out.push_back('h');
+    out.push_back('f');
+    out.push_back('o');
+    out.push_back('o');
     w32(1); // 1 modification
-    out.push_back('u'); out.push_back('n'); out.push_back('a'); out.push_back('m');
+    out.push_back('u');
+    out.push_back('n');
+    out.push_back('a');
+    out.push_back('m');
     w32(3);
     const char* name = "CustomUnit";
-    for (const char* p = name; *p; p++) out.push_back(*p);
+    for (const char* p = name; *p; p++)
+        out.push_back(*p);
     out.push_back(0);
-    while (out.size() % 4 != 0) out.push_back(0);
+    while (out.size() % 4 != 0)
+        out.push_back(0);
 
     auto path = write_temp(out);
     REQUIRE(!path.empty());
