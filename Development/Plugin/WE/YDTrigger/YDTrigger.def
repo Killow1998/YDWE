@@ -1,2 +1,20 @@
 LIBRARY "YDTrigger"
 EXPORTS
+    ydt_refresh
+    ydt_get_trigger_count
+    ydt_get_trigger_name
+    ydt_get_trigger_disabled
+    ydt_get_eca_count
+    ydt_get_eca_func_name
+    ydt_get_eca_gui_id
+    ydt_get_eca_param_count
+    ydt_get_eca_param_value
+    ydt_set_trigger_name
+    ydt_set_trigger_disabled
+    ydt_set_eca_func_name
+    ydt_set_eca_active
+    ydt_set_eca_param_value
+    ydt_add_eca
+    ydt_remove_eca
+    ydt_read_object_file
+    ydt_write_object_file

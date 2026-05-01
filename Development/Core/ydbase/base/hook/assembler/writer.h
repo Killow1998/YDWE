@@ -22,10 +22,10 @@ namespace hook { namespace assembler {
 		inline void emit(T val) 
 		{
 			static_assert(std::is_integral<T>::value, "emit's param must be integer.");
-			assert((size() + sizeof T) <= BufSizeT);
+			assert((size() + sizeof(T)) <= BufSizeT);
 
 			*reinterpret_cast<T*>(cur_) = val;
-			cur_ += sizeof T;
+			cur_ += sizeof(T);
 		}
 
 		void emit_operand(reg r, const operand& adr) 
@@ -120,12 +120,12 @@ namespace hook { namespace assembler {
 		bool executable()
 		{
 			DWORD protect = 0;
-			if (!::VirtualProtectEx(::GetCurrentProcess(), (void*)this, sizeof mybase, PAGE_EXECUTE_READWRITE, &protect)) 
+			if (!::VirtualProtectEx(::GetCurrentProcess(), (void*)this, sizeof(mybase), PAGE_EXECUTE_READWRITE, &protect)) 
 			{
 				return false;
 			}
 
-			if (!::FlushInstructionCache(::GetCurrentProcess(), (void*)this, sizeof mybase)) 
+			if (!::FlushInstructionCache(::GetCurrentProcess(), (void*)this, sizeof(mybase))) 
 			{
 				return false;
 			}

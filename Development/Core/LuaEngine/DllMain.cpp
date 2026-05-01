@@ -43,7 +43,7 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID pReserved)
 	}
 	else if (reason == DLL_PROCESS_DETACH)
 	{
-		if (L) LuaEngineDestory(L);
+		if (L) LuaEngineDestroy(L);
 	}
 
 	return TRUE;

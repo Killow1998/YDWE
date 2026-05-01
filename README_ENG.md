@@ -6,10 +6,10 @@ Based on Warcraft III World Editor, YDWE is a tool used for making Warcraft III 
 
 ## Compile
 
-1. Visual Studio 2017 with Update 7
-2. Windows 10 SDK 10.0.15063
-3. Running `/Build/Build_Release.bat`
-4. The compiled files are generated under the `/Build/publish/Release/` directory.
+1. Visual Studio 2022 (17.0+) with C++20 support
+2. Windows 10 SDK 10.0 or higher
+3. Running `MSBuild YDWE.sln /t:Build /p:Configuration=Debug /p:Platform=Win32`
+4. The compiled files are generated under the `Component\bin\` directory.
 
 
 ## Other Referenced Projects

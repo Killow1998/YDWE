@@ -4,6 +4,7 @@
 #include "Core/CC_GUIID.h"
 #include <algorithm>
 #include <map>
+#include <string>
 #include <vector>
 
 struct multiple 

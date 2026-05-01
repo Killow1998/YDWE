@@ -1,0 +1,6 @@
+[Info]
+PluginName = YDAgentCore
+[Load]
+Enable = 1
+Loader = YDAgentCore.lua
+Dll    = YDTrigger.dll

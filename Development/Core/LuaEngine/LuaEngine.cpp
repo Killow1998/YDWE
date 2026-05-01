@@ -97,18 +97,18 @@ lua_State* LuaEngineCreate(const wchar_t* name)
 	catch (std::exception const& e)
 	{
 		LOGGING_ERROR(lg) << "exception: " << e.what();
-		LuaEngineDestory(L);
+		LuaEngineDestroy(L);
 		return nullptr;
 	}
 	catch (...)
 	{
 		LOGGING_ERROR(lg) << "unknown exception.";
-		LuaEngineDestory(L);
+		LuaEngineDestroy(L);
 		return nullptr;
 	}
 }
 
-void LuaEngineDestory(lua_State* L)
+void LuaEngineDestroy(lua_State* L)
 {
 	logging::logger* lg = logging::get(L);
 	if (lg) {

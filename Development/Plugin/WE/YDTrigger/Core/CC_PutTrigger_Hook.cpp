@@ -1,5 +1,8 @@
 #include "CC_Include.h"
 
+// Forward declarations for agent API integration
+extern "C" void agent_api_add_trigger(DWORD trigger_ptr);
+
 int _fastcall 
 CC_PutTrigger_Count(DWORD This, DWORD cc_gui_type)
 {
@@ -233,6 +236,7 @@ CC_PutTrigger_Hook(DWORD This, DWORD EDX, DWORD OutClass)
   SaveLoadCheck_Reset();
 
   *(DWORD*)(*(DWORD*)(This+0x48)+0x30) = This;
+  agent_api_add_trigger(This);
 
   CC_PutTrigger_ECA_ExternProc(This, OutClass);
   

@@ -1,0 +1,6 @@
+[Info]
+PluginName = YDLspClient
+[Load]
+Enable = 1
+Loader = YDLspClient.lua
+Dll    = lsp_client.dll

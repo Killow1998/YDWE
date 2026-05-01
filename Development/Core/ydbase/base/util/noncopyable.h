@@ -1,15 +1,13 @@
 #pragma once
 
-#include <base/config.h>
-
-namespace base { 
-	class noncopyable
-	{
-	protected:
-		noncopyable() {}
-		~noncopyable() {}
-	private:
-		noncopyable( const noncopyable& );
-		const noncopyable& operator=( const noncopyable& );
-	};
+namespace base {
+    class noncopyable
+    {
+    protected:
+        noncopyable() = default;
+        ~noncopyable() = default;
+    public:
+        noncopyable(const noncopyable&) = delete;
+        noncopyable& operator=(const noncopyable&) = delete;
+    };
 }
