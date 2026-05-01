@@ -178,6 +178,7 @@
     <ClCompile Include="test_main.cpp" />
     <ClCompile Include="test_horrible_cast.cpp" />
     <ClCompile Include="test_singleton.cpp" />
+    <ClCompile Include="test_noncopyable.cpp" />
     <ClCompile Include="test_object_api.cpp" />
     <ClCompile Include="test_agent_util.cpp" />
     <ClCompile Include="storm_stubs.cpp" />
