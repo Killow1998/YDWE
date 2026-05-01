@@ -22,3 +22,4 @@
   New trigger[8] = 'AI_CreatedTrigger'
 [PASS] delete_trigger
   After delete: 9 -> 8 triggers
+  Global vars: 0

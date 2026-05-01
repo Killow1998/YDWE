@@ -13,6 +13,10 @@ ffi.cdef([[
     int ydt_add_eca(int,int); int ydt_remove_eca(int,int,int);
     int ydt_create_trigger(const char*);
     int ydt_delete_trigger(int);
+    int ydt_get_global_count(void);
+    const char* ydt_get_global_name(int);
+    int ydt_get_global_type(int);
+    const char* ydt_get_global_value(int);
 ]])
 
 local function ts(p)
@@ -158,6 +162,15 @@ local function run_all_tests(dll)
         local after_del = dll.ydt_get_trigger_count()
         ok("delete_trigger", del_ok and after_del == old_tc)
         RESULTS[#RESULTS+1] = string.format("  After delete: %d -> %d triggers", new_tc, after_del)
+    end
+
+    -- 15. Global variables (if any captured)
+    local gc = dll.ydt_get_global_count and dll.ydt_get_global_count() or 0
+    RESULTS[#RESULTS+1] = string.format("  Global vars: %d", gc)
+    for i = 0, math.min(gc - 1, 3) do
+        local gn = ts(dll.ydt_get_global_name(i)) or "?"
+        local gv = ts(dll.ydt_get_global_value(i)) or "?"
+        RESULTS[#RESULTS+1] = string.format("  Global[%d]: %s = %s", i, gn, gv)
     end
 
     -- Write report

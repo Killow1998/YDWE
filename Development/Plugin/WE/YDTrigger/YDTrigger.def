@@ -20,3 +20,8 @@ EXPORTS
     ydt_write_object_file
     ydt_create_trigger
     ydt_delete_trigger
+    ydt_get_global_count
+    ydt_get_global_name
+    ydt_get_global_type
+    ydt_get_global_value
+    ydt_set_global_value

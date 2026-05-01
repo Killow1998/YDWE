@@ -245,6 +245,68 @@ static DWORD find_root_from_triggers() {
     return 0;
 }
 
+// ===== Global variable support =====
+
+static DWORD g_globals_container = 0;
+
+static DWORD find_global_var_container() {
+    DWORD base = g_nWEBase;
+    if (!base) return 0;
+    __try {
+        for (DWORD addr = base + 0x00600000; addr < base + 0x00800000; addr += 4) {
+            DWORD cand = *(DWORD*)addr;
+            if (cand < base || cand > base + 0x03000000) continue;
+            DWORD vc = *(DWORD*)(cand + 0x128);
+            if (vc < 1 || vc > 5000) continue;
+            DWORD* va = *(DWORD**)(cand + 0x12C);
+            if (!va) continue;
+            DWORD v0 = va[0];
+            if (!v0 || v0 < base || v0 > base + 0x03000000) continue;
+            g_globals_container = cand;
+            return cand;
+        }
+    } __except(EXCEPTION_EXECUTE_HANDLER) {}
+    return 0;
+}
+
+extern "C" void agent_api_capture_globals_container(DWORD container) {
+    if (container) g_globals_container = container;
+}
+
+struct GlobalVar {
+    char name[260];
+    DWORD type;
+    char value[260];
+};
+static std::vector<GlobalVar> g_globals;
+
+static void refresh_globals() {
+    g_globals.clear();
+    if (!g_globals_container) return;
+    DWORD base = g_nWEBase;
+    __try {
+        DWORD count = *(DWORD*)(g_globals_container + 0x128);
+        DWORD* varray = *(DWORD**)(g_globals_container + 0x12C);
+        if (!varray || count > 5000) return;
+        for (DWORD i = 0; i < count; i++) {
+            DWORD vp = varray[i];
+            if (!vp) continue;
+            GlobalVar gv = {};
+            // Get name by calling GetGlobalVarName if available, else use index
+            // The name is sometimes stored at +0x20 or +0x4C of the container's children
+            const char* nm = (const char*)(vp + 0x20);
+            if (nm && *nm) BLZSStrCopy(gv.name, nm, 260);
+            else {
+                BLZSStrPrintf(gv.name, 260, "var_%03d", i);
+            }
+            gv.type = *(DWORD*)(vp + 0x48);
+            const char* val = (const char*)(vp + 0x4C);
+            if (val) BLZSStrCopy(gv.value, val, 260);
+            g_globals.push_back(gv);
+        }
+    } __except(EXCEPTION_EXECUTE_HANDLER) {}
+}
+
 } // namespace agent_api
 
 // Called from CC_PutTrigger_Hook during compilation to build trigger list
@@ -782,6 +844,46 @@ static int delete_trigger_impl(DWORD trig, DWORD root) {
         DWORD tc = *(DWORD*)(trig + 0x0C); DWORD* ta = *(DWORD**)(trig + 0x10);
         if (ta) { for(DWORD i=0;i<tc;i++) if(ta[i]) HeapFree(GetProcessHeap(),0,(void*)ta[i]); HeapFree(GetProcessHeap(),0,(void*)ta); }
         HeapFree(GetProcessHeap(), 0, (void*)trig);
+        return 1;
+    } __except(EXCEPTION_EXECUTE_HANDLER) { return 0; }
+}
+
+int __cdecl ydt_get_global_count(void) {
+    using namespace agent_api;
+    if (!g_globals_container) { refresh_globals(); find_global_var_container(); refresh_globals(); }
+    if (g_globals.empty()) refresh_globals();
+    return (int)g_globals.size();
+}
+
+const char* __cdecl ydt_get_global_name(int index) {
+    using namespace agent_api;
+    if (index < 0 || index >= (int)g_globals.size()) return nullptr;
+    return alloc_str(g_globals[index].name);
+}
+
+int __cdecl ydt_get_global_type(int index) {
+    using namespace agent_api;
+    if (index < 0 || index >= (int)g_globals.size()) return -1;
+    return (int)g_globals[index].type;
+}
+
+const char* __cdecl ydt_get_global_value(int index) {
+    using namespace agent_api;
+    if (index < 0 || index >= (int)g_globals.size()) return nullptr;
+    return alloc_str(g_globals[index].value);
+}
+
+int __cdecl ydt_set_global_value(int index, const char* value) {
+    using namespace agent_api;
+    if (index < 0 || index >= (int)g_globals.size() || !value) return 0;
+    __try {
+        BLZSStrCopy(g_globals[index].value, value, 260);
+        if (g_globals_container) {
+            DWORD* varray = *(DWORD**)(g_globals_container + 0x12C);
+            if (varray && varray[index]) {
+                BLZSStrCopy((char*)(varray[index] + 0x4C), value, 260);
+            }
+        }
         return 1;
     } __except(EXCEPTION_EXECUTE_HANDLER) { return 0; }
 }
