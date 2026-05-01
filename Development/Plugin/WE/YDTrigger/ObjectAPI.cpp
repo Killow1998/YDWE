@@ -104,6 +104,8 @@ static bool parse_obj_data(const unsigned char* data, DWORD size, ObjFile& file)
         rec.obj_id = read_u32(p);
         rec.base_id = 0;
         DWORD mod_count = read_u32(p);
+        if (mod_count > 512)
+            return false; // safety: no object has 500+ modifications
 
         for (DWORD j = 0; j < mod_count; j++) {
             if (p + 8 > end)
@@ -170,6 +172,8 @@ static bool parse_obj_data(const unsigned char* data, DWORD size, ObjFile& file)
         rec.obj_id = read_u32(p);
         rec.base_id = read_u32(p);
         DWORD mod_count = read_u32(p);
+        if (mod_count > 512)
+            return false; // safety: no object has 500+ modifications
 
         for (DWORD j = 0; j < mod_count; j++) {
             if (p + 8 > end)
@@ -809,7 +813,6 @@ const char* __cdecl ydt_read_object_file(const char* file_path) {
     if (!file_path)
         return nullptr;
 
-    // Read entire file
     HANDLE hFile = CreateFileA(file_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
                                NULL);
     if (hFile == INVALID_HANDLE_VALUE)
@@ -846,6 +849,16 @@ const char* __cdecl ydt_read_object_file(const char* file_path) {
     object_api::free_obj_file(file);
     return json;
 }
+
+static int safe_json_to_binary(const char* json_data, std::vector<unsigned char>& out) {
+    object_api::ObjFile file;
+    if (!object_api::json_to_objfile(json_data, file))
+        return 0;
+    out = object_api::objfile_to_binary(file);
+    object_api::free_obj_file(file);
+    return out.empty() ? 0 : 1;
+}
+
 
 int __cdecl ydt_write_object_file(const char* file_path, const char* json_data) {
     if (!file_path || !json_data)

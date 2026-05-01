@@ -18,3 +18,5 @@ EXPORTS
     ydt_remove_eca
     ydt_read_object_file
     ydt_write_object_file
+    ydt_create_trigger
+    ydt_delete_trigger

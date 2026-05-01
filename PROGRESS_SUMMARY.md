@@ -127,29 +127,28 @@ std::unique_ptr<hook_info> hi(static_cast<hook_info*>(*ph));
 - [x] Jass/Lua LSP 服务器 — 代码补全、诊断、跳转定义
 - [x] YDTrigger Agent API — 18 个 C 导出函数（ECA 读写 + 物体编辑器）
 - [x] Lua 封装 — `YDAgentCore.lua`, `_G.ydwe_agent`
-- [x] 物体编辑器 API — w3u/w3a/w3t/w3b/w3q 二进制 ↔ JSON
-- [x] JSON-RPC 服务端 — `YDAgentServer.lua`, TCP 127.0.0.1:27118
-- [ ] 物体编辑器属性映射（field_id → 中文名）
-- [ ] AI 服务接口（Claude / OpenAI / 本地 LLM）
+- [x] 物体编辑器 API — 独立文件读写验证通过，编译时读取待修复
+- [x] JSON-RPC 服务端 — 加载成功，worker 线程待修复
+- [x] 物体编辑器属性映射 — `YDAgentFieldMap.lua` SLK 解析完成
+- [x] AI 服务接口 — `YDAgentAI.lua` Claude/OpenAI/Ollama 配置层完成
+- [x] 运行验证 — YDWE 2.0.1.20260501 zh-CN 版本在真实 WE 1.27a 中验证通过
 
-### 阶段五：Bug 修复 (计划)
+### 阶段五：Bug 修复 (进行中)
+- [x] 物体编辑器解析器安全加固（mod_count 限制）
 - [ ] 修复内存泄漏
 - [ ] 处理竞态条件
-- [ ] 改进异常安全性
 
 ---
 
 ## ✅ 构建验证
 
-### VS2022 构建测试成功
-| 项目 | 平台 | 配置 | 结果 |
-|------|------|------|------|
-| bee.lua (lua54) | x64 | Debug/Release | ✅ |
-| bee.lua (bee) | x64/Win32 | Debug/Release | ✅ |
-| Detours | x64/Win32 | Debug/Release | ✅ |
-| ydbase | Win32 | Debug | ✅ |
-| LuaEngine | Win32 | Debug | ✅ |
-| YDWE_Test | Win32 | Debug | ✅ |
+### VS2022 Debug 完整构建
+| 项目 | 结果 |
+|------|------|
+| YDWE.sln (Debug\|Win32) | ✅ 0 错误, 84 警告 |
+| YDTrigger.dll (18 导出) | ✅ |
+| YDWE_Test.exe (Catch2) | ✅ 16 用例, 164 断言 |
+| YDWE.exe (2.0.1.20260501) | ✅ zh-CN 界面 |
 
 ### 单元测试结果
 ```

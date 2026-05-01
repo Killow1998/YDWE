@@ -4,4 +4,3 @@ PluginName = YDAgentServer
 Enable = 1
 Loader = YDAgentServer.lua
 Dll    = YDTrigger.dll
-Depends = YDAgentCore

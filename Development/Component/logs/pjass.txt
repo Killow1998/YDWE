@@ -1,0 +1,4 @@
+Parse successful:     2418 lines: Q:/AppData/ydwe/YDWE/Development/Component/compiler/jass/24/common.j
+Parse successful:    10230 lines: Q:/AppData/ydwe/YDWE/Development/Component/compiler/jass/24/blizzard.j
+Parse successful:     1988 lines: logs\currentmapscript.j
+Parse successful:    14636 lines: <total>

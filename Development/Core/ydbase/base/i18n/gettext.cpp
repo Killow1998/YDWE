@@ -16,7 +16,7 @@ namespace base { namespace i18n {
 
 	fs::path     workpath;
 	std::string  errormsg = "";
-	std::wstring language = L"zh-CN";
+	std::wstring language = L"zh-CN";  // force Chinese as default
 	std::wstring domain   = L"";
 	alllang_t    cache_alllang;
 	language_t*  cache_language = nullptr;

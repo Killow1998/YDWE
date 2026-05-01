@@ -1,0 +1,24 @@
+[PASS] trigger_count
+[PASS] list_triggers(8 triggers)
+  Trigger[0]=Init
+[PASS] set_trigger_name
+[PASS] set_trigger_disabled(on)
+[PASS] set_trigger_disabled(off)
+  Trigger[0] E:1 C:0 A:2
+  Action[0]=FogModifierStart gui:-1
+[PASS] eca_param_count
+  Params: CreateFogModifierRect
+[PASS] set_eca_param_value
+[PASS] add_eca
+  Actions: 2 -> 3
+[PASS] set_eca_func_name
+[PASS] set_eca_active(off)
+[PASS] set_eca_active(on)
+[PASS] remove_eca
+  Actions: 3 -> 2
+[PASS] create_trigger
+  Triggers: 8 -> 9
+[PASS] new trigger name matches
+  New trigger[8] = 'AI_CreatedTrigger'
+[PASS] delete_trigger
+  After delete: 9 -> 8 triggers

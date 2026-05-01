@@ -88,6 +88,7 @@ namespace
 		{ "LaunchDisableSecurityAccess",             Attribute("MapTest") },
 		{ "EnableHost",                              Attribute("MapTest") },
 		{ "EnableMapSlk",                            Attribute("MapTest") },
+		{ "EnableSound",                             Attribute("MapTest") },
 		{ "EnableDotNetSupport",                     Attribute("ThirdPartyPlugin") },
 		{ "EnableTesh",                              Attribute("ThirdPartyPlugin") },
 		{ "EnableManualNewId",                       Attribute("FeatureToggle") },
@@ -194,6 +195,7 @@ void CMainWindow::ResetConfig(base::ini::table& table)
 	table["MapTest"]["LaunchDisableSecurityAccess"] = "0";
 	table["MapTest"]["EnableHost"] = "0";
 	table["MapTest"]["EnableMapSlk"] = "0";
+	table["MapTest"]["EnableSound"] = "0";
 	table["ScriptCompiler"]["EnableJassHelper"] = "1";
 	table["ScriptCompiler"]["EnableJassHelperDebug"] = "0";
 	table["ScriptCompiler"]["EnableJassHelperOptimization"] = "1";

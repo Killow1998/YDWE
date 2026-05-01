@@ -273,8 +273,8 @@ end
 
 function event.EVENT_MSS_LOAD(event_data)
 	log.debug("Loading provider " .. event_data.library_name)
-
-	-- 全部放行
+	-- 声音由 Warcraft III 引擎控制，无法从 Lua 侧拦截。
+	-- 可通过 War3 游戏内选项关闭声音。
 	return 0
 end
 
