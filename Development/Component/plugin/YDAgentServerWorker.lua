@@ -569,7 +569,7 @@ function agent.list_globals()
             name = name,
             type = type_info and type_info.id or agent.global_type(i),
             type_name = type_info and type_info.name or nil,
-            array = type_info and type_info.array or nil,
+            array = type_info ~= nil and type_info.array or nil,
             value = agent.global_value(i),
         }
     end
