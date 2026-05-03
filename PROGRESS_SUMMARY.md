@@ -121,17 +121,20 @@ std::unique_ptr<hook_info> hi(static_cast<hook_info*>(*ph));
 ### 阶段三继续 (80%)
 - [ ] 规范化代码风格（Tab/空格统一）
 - [ ] 改进错误处理机制
-- [x] 单元测试框架 (Catch2, 18 用例, 171 断言)
+- [x] 单元测试框架 (Catch2, 18 用例, 169 断言)
 
 ### 阶段四：AI 辅助功能 (进行中 — 2026-05-01)
 - [x] Jass/Lua LSP 服务器 — 代码补全、诊断、跳转定义
-- [x] YDTrigger Agent API — 18 个 C 导出函数（ECA 读写 + 物体编辑器）
+- [x] YDTrigger Agent API — 25 个 C 导出函数（ECA 读写 + 全局变量 + 物体编辑器）
 - [x] Lua 封装 — `YDAgentCore.lua`, `_G.ydwe_agent`
 - [x] 物体编辑器 API — 独立文件读写验证通过，编译时读取待修复
-- [x] JSON-RPC 服务端 — 加载成功，worker 线程待修复
+- [x] JSON-RPC 服务端 — TCP worker 已修复，`diag.status` / `diag.smoke` loopback 通过
+- [x] 运行时 smoke 脚本 — `Development\AI\ydagent_smoke.py`，支持 TCP 轮询、诊断检查、`--restore` 可逆变更
 - [x] 物体编辑器属性映射 — `YDAgentFieldMap.lua` SLK 解析完成
 - [x] AI 服务接口 — `YDAgentAI.lua` Claude/OpenAI/Ollama 配置层完成
-- [x] 运行验证 — YDWE 2.0.1.20260501 zh-CN 版本在真实 WE 1.27a 中验证通过
+- [x] Stub 运行验证 — `YDAGENT_TEST_STUB` 下 TCP/JSON-RPC、`diag.status`、`diag.smoke`、`agent.list_globals`、`ydagent_smoke.py --restore` 通过
+- [x] 真实 YDWE Agent 触发器读写验证 — 通过 YDWE 外壳启动编辑器后，`diag.status` / `diag.smoke` 通过；保存触发编译后可读取 5 个真实触发器，并已完成触发器 0 可逆改名和恢复
+- [x] 真实 YDWE Agent 全局变量名称/类型读取验证 — 保存触发编译后 `agent.list_globals` 返回 17 个真实全局变量，Lua Worker 从 `currentmapscript.j` 的 `globals` 声明合并 `type` / `type_name`；值读取和可逆改值仍待后续实现
 
 ### 阶段五：Bug 修复 (进行中)
 - [x] 物体编辑器解析器安全加固（mod_count 限制）
@@ -146,22 +149,43 @@ std::unique_ptr<hook_info> hi(static_cast<hook_info*>(*ph));
 | 项目 | 结果 |
 |------|------|
 | YDWE.sln (Debug\|Win32) | ✅ 0 错误, 84 警告 |
-| YDTrigger.dll (18 导出) | ✅ |
-| YDWE_Test.exe (Catch2) | ✅ 16 用例, 164 断言 |
+| YDTrigger.dll (25 导出) | ✅ |
+| YDWE_Test.exe (Catch2) | ✅ 18 用例, 169 断言 |
 | YDWE.exe (2.0.1.20260501) | ✅ zh-CN 界面 |
 
 ### 单元测试结果
 ```
-Randomness seeded to: 1555011278
+Randomness seeded to: 625623932
 ===============================================================================
-All tests passed (10 assertions in 5 test cases)
+All tests passed (169 assertions in 18 test cases)
 ```
 
 **测试覆盖**:
 - `horrible_cast` - float/int 转换、指针转换、constexpr 验证
 - `singleton` - 唯一性、状态保持、向后兼容别名
+- YDTrigger Agent/Object API - 触发器、ECA、物体编辑器、全局变量 RPC wrapper 基础行为
 
 **注意**: 暂时禁用 `TreatWarningAsError` 以允许第三方库警告通过。核心现代化代码编译无错误。
+
+### Agent 真实 GUI 验证记录
+
+2026-05-03 已完成真实 YDWE 编辑器进程内触发器读取、触发器可逆修改和全局变量名称/类型读取验证。
+
+已验证清单：
+- 启动 `Development\Component\YDWE.exe` 并加载 `Development\Component\example(演示地图)\系统\中心计时器-单位环绕(全局变量版).w3x`
+- 修复 `YDAgentServer` worker 启动：保留 `bee.thread` worker 句柄，并在线程内注入 `Development\Component\plugin\?.lua`
+- `netstat` 确认 `127.0.0.1:27118` 已监听，`Development\AI\ydagent_client.py status` 和 `diag.smoke` 通过
+- 普通打开/保存前 `trigger_count` 为 0；保存触发编译后，`CC_PutTrigger_Hook` 填充缓存，`agent.list_triggers` 返回 5 个真实触发器
+- `agent.get_eca_tree 0` 成功读取真实 ECA：`MapInitializationEvent` 和 `CreateFogModifierRectBJ`
+- `agent.compress_context` 可生成真实触发器上下文摘要
+- 触发器 0 从 `对战初始化` 临时改名为 `对战初始化__YDAGENT_SMOKE__`，读回确认后已恢复为 `对战初始化`
+- 修复全局变量读取诊断链路：`ydt_global_diag` 暴露捕获状态，`GetGlobalVarName_Hook` 调用原始函数后记录返回名称
+- 保存触发编译后，`agent.list_globals` 返回 17 个真实全局变量名，包括 `udg_unit`、`udg_lv`、`udg_angle`、`udg_RunIndex`、`gg_trg_round`
+- `YDAgentServerWorker.lua` 从 `Development\Component\logs\currentmapscript.j` 的 `globals` 段解析变量声明，合并 `type`、`type_name` 和 `array` 到 `agent.list_globals`；真实 GUI 中已验证 `integer`、`real`、`unit`、`trigger` 类型可区分
+
+未完成清单：
+- 全局变量当前已完成名称和类型读取；默认值/当前值读取和 `agent.set_global_value` 可逆改值仍待定位
+- 本次演示地图保存编译会因地图内生成 JASS 错误中断，但不影响触发器缓存捕获和 RPC 读写验证
 
 ## ⚠️ 已知问题
 
@@ -189,5 +213,5 @@ All tests passed (10 assertions in 5 test cases)
 
 ---
 
-*最后更新: 2026-05-01 — 阶段一/二/三 (60%)*
+*最后更新: 2026-05-03 — Agent 真实 YDWE 触发器读写验证通过，全局变量验证待定位*
 *重构报告: `REFACTORING_REPORT.md`*

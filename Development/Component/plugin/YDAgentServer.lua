@@ -6,6 +6,7 @@ local ffi = require "ffi"
 
 ffi.cdef([[
     int ydt_get_trigger_count(void);
+    int ydt_refresh(void);
     const char* ydt_get_trigger_name(int);
     int ydt_get_trigger_disabled(int);
     int ydt_get_eca_count(int,int);
@@ -15,16 +16,25 @@ ffi.cdef([[
     const char* ydt_get_eca_param_value(int,int,int,int);
     int ydt_set_trigger_name(int,const char*);
     int ydt_set_trigger_disabled(int,int);
+    int ydt_set_eca_func_name(int,int,int,const char*);
+    int ydt_set_eca_active(int,int,int,int);
     int ydt_set_eca_param_value(int,int,int,int,const char*);
     int ydt_add_eca(int,int);
     int ydt_remove_eca(int,int,int);
     int ydt_create_trigger(const char*);
+    int ydt_delete_trigger(int);
+    int ydt_get_global_count(void);
+    const char* ydt_get_global_name(int);
+    int ydt_get_global_type(int);
+    const char* ydt_get_global_value(int);
+    int ydt_set_global_value(int,const char*);
     const char* ydt_read_object_file(const char*);
     int ydt_write_object_file(const char*,const char*);
 ]])
 
 local function ts(p)
     if p == nil then return nil end
+    if type(p) == "string" then return p ~= "" and p or nil end
     local s = ffi.string(p)
     if s == "" then return nil end
     return s
@@ -48,6 +58,58 @@ local function jev(v)
 end
 
 local LOG_DIR = "Q:/AppData/ydwe/YDWE/Development/Component/logs"
+local STOP_CHANNEL = "ydagent_stop"
+local worker_started = false
+local worker_thread = nil
+
+local function component_root_from_dll(path)
+    local s = path and path.string and path:string() or tostring(path or "")
+    return s:match("^(.*)[/\\]plugin[/\\][^/\\]+$") or ""
+end
+
+local function start_tcp_worker(path)
+    local ok_thread, thread = pcall(require, "bee.thread")
+    if not ok_thread then
+        log.error("YDAgentServer: bee.thread unavailable: " .. tostring(thread))
+        return false
+    end
+
+    local dll_path = path and path.string and path:string() or "YDTrigger.dll"
+    local component_root = component_root_from_dll(path)
+    local plugin_root = component_root ~= "" and (component_root .. "/plugin") or ""
+    local worker_log = component_root ~= "" and (component_root .. "/logs/ydagent_worker_error.log") or "ydagent_worker_error.log"
+    local script = table.concat({
+        "local function ydagent_worker_log(message)",
+        "    local f = io.open(" .. string.format("%q", worker_log) .. ", \"a\")",
+        "    if f then",
+        "        f:write(os.date(\"%Y-%m-%d %H:%M:%S\"), \" \", tostring(message), \"\\n\")",
+        "        f:close()",
+        "    end",
+        "end",
+        "ydagent_worker_log(\"worker script entered\")",
+        "local ok, err = xpcall(function()",
+        "package.path=" .. string.format("%q", (plugin_root ~= "" and (plugin_root .. "/?.lua;") or "") .. package.path),
+        "package.cpath=" .. string.format("%q", package.cpath),
+        "_G.YDAGENT_DLL_PATH=" .. string.format("%q", dll_path),
+        "_G.YDAGENT_COMPONENT_ROOT=" .. string.format("%q", component_root),
+        "require " .. string.format("%q", "YDAgentServerWorker"),
+        "end, debug.traceback)",
+        "if not ok then",
+        "    ydagent_worker_log(err)",
+        "end",
+    }, "\n")
+
+    local ok, err = pcall(function()
+        worker_thread = thread.thread(script)
+    end)
+    if not ok then
+        log.error("YDAgentServer: failed to start TCP worker: " .. tostring(err))
+        return false
+    end
+    worker_started = true
+    log.info("YDAgentServer: TCP worker launched on 127.0.0.1:27118")
+    return true
+end
 
 -- Simple JSON array decoder: ["method", arg1, arg2, ...]
 local function jd_arr(s)
@@ -133,6 +195,20 @@ local function handle_request(dll)
             result = dll.ydt_set_eca_active(req[2], req[3], req[4], req[5] and 1 or 0) ~= 0
         elseif method == "refresh" then
             result = dll.ydt_get_trigger_count()
+        elseif method == "list_globals" then
+            local n = dll.ydt_get_global_count()
+            local list = {}
+            for i=0,n-1 do
+                list[#list+1] = {
+                    index=i,
+                    name=ts(dll.ydt_get_global_name(i)),
+                    type=dll.ydt_get_global_type(i),
+                    value=ts(dll.ydt_get_global_value(i)),
+                }
+            end
+            result = list
+        elseif method == "set_global_value" then
+            result = dll.ydt_set_global_value(req[2], req[3]) ~= 0
         else
             result = {error="unknown method: "..method}
         end
@@ -154,9 +230,11 @@ end
 
 local loader = {}
 loader.load = function(path)
+    local tcp_ok = start_tcp_worker(path)
     log.info("YDAgentServer: file IPC ready. Write to logs/agent.in.json")
 
-    local dll = ffi.load("YDTrigger.dll")
+    local dll_name = path and path.string and path:string() or "YDTrigger.dll"
+    local dll = ffi.load(dll_name)
     if not dll then log.error("AgentServer: no DLL"); return false end
 
     local ok, ev = pcall(require, "ev")
@@ -169,7 +247,16 @@ loader.load = function(path)
         log.info("AgentServer: will process requests on compilation")
     end
 
-    return true
+    return tcp_ok or true
 end
-loader.unload = function() end
+loader.unload = function()
+    if worker_started then
+        local ok_thread, thread = pcall(require, "bee.thread")
+        if ok_thread then
+            thread.channel(STOP_CHANNEL):push("stop")
+        end
+        worker_started = false
+        worker_thread = nil
+    end
+end
 return loader

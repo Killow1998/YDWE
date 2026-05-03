@@ -16,6 +16,18 @@ local START_TIME = os.time()
 local LAST_ERROR = nil
 local REVIEW_PUBLISHED = 0
 
+local function open_channel(name)
+    local ok, ch = pcall(thread.channel, name)
+    if ok then
+        return ch
+    end
+    if thread.newchannel then
+        pcall(thread.newchannel, name)
+    end
+    ok, ch = pcall(thread.channel, name)
+    return ok and ch or nil
+end
+
 ffi.cdef[[
     int  ydt_refresh(void);
     int  ydt_get_trigger_count(void);
@@ -33,17 +45,27 @@ ffi.cdef[[
     int  ydt_set_eca_param_value(int trig_index, int eca_type, int eca_idx, int param_idx, const char* value);
     int  ydt_add_eca(int trig_index, int eca_type);
     int  ydt_remove_eca(int trig_index, int eca_type, int eca_idx);
+    int  ydt_create_trigger(const char* name);
+    int  ydt_delete_trigger(int trig_index);
+    int  ydt_get_global_count(void);
+    const char* ydt_get_global_name(int index);
+    int  ydt_get_global_type(int index);
+    const char* ydt_get_global_value(int index);
+    int  ydt_set_global_value(int index, const char* value);
+    const char* ydt_global_diag(void);
     const char* ydt_read_object_file(const char* file_path);
     int  ydt_write_object_file(const char* file_path, const char* json_data);
 ]]
 
-local ok_ydt, loaded_ydt = pcall(ffi.load, DLL_PATH)
-if not ok_ydt then
-    log.error("YDAgentServer: failed to load YDTrigger.dll: " .. tostring(loaded_ydt))
-    return
+local YDT = rawget(_G, "YDAGENT_TEST_STUB")
+if not YDT then
+    local ok_ydt, loaded_ydt = pcall(ffi.load, DLL_PATH)
+    if not ok_ydt then
+        log.error("YDAgentServer: failed to load YDTrigger.dll: " .. tostring(loaded_ydt))
+        return
+    end
+    YDT = loaded_ydt
 end
-
-local YDT = loaded_ydt
 local ok_field_map, field_map_err = pcall(field_map.load, COMPONENT_ROOT)
 if not ok_field_map then
     log.error("YDAgentServer: failed to load field map: " .. tostring(field_map_err))
@@ -53,7 +75,10 @@ local json = {}
 json.null = {}
 
 local function clear_apply_approvals()
-    local ch = thread.channel(APPLY_APPROVAL_CHANNEL)
+    local ch = open_channel(APPLY_APPROVAL_CHANNEL)
+    if not ch then
+        return
+    end
     while true do
         local ok = ch:pop()
         if not ok then
@@ -63,17 +88,27 @@ local function clear_apply_approvals()
 end
 
 local function consume_apply_approval()
-    local ok, value = thread.channel(APPLY_APPROVAL_CHANNEL):pop()
+    local ch = open_channel(APPLY_APPROVAL_CHANNEL)
+    if not ch then
+        return false
+    end
+    local ok, value = ch:pop()
     return ok and value == "approved"
 end
 
 local function publish_review_plan(plan)
     REVIEW_PUBLISHED = REVIEW_PUBLISHED + 1
-    thread.channel(REVIEW_CHANNEL):push(json.encode(plan))
+    local ch = open_channel(REVIEW_CHANNEL)
+    if ch then
+        ch:push(json.encode(plan))
+    end
 end
 
 local function clear_review_queue()
-    local ch = thread.channel(REVIEW_CHANNEL)
+    local ch = open_channel(REVIEW_CHANNEL)
+    if not ch then
+        return
+    end
     while true do
         local ok = ch:pop()
         if not ok then
@@ -298,6 +333,9 @@ local function to_str(p)
     if p == nil then
         return nil
     end
+    if type(p) == "string" then
+        return p ~= "" and p or nil
+    end
     local s = ffi.string(p)
     if s == "" then
         return nil
@@ -310,6 +348,87 @@ local function path_join(root, name)
         return root .. name
     end
     return root .. "\\" .. name
+end
+
+local GLOBAL_TYPE_IDS = {
+    integer = 1,
+    real = 2,
+    boolean = 3,
+    string = 4,
+    timer = 5,
+    trigger = 6,
+    unit = 7,
+    unitcode = 8,
+    abilcode = 9,
+    item = 10,
+    itemcode = 11,
+    group = 12,
+    player = 13,
+    location = 14,
+    destructable = 15,
+    force = 16,
+    rect = 17,
+    region = 18,
+    sound = 19,
+    effect = 20,
+    unitpool = 21,
+    itempool = 22,
+    quest = 23,
+    questitem = 24,
+    timerdialog = 25,
+    leaderboard = 26,
+    multiboard = 27,
+    multiboarditem = 28,
+    trackable = 29,
+    dialog = 30,
+    button = 31,
+    texttag = 32,
+    lightning = 33,
+    image = 34,
+    fogstate = 35,
+    fogmodifier = 36,
+    radian = 37,
+    degree = 38,
+}
+
+local function load_script_global_types()
+    local f = io.open(path_join(COMPONENT_ROOT, "logs\\currentmapscript.j"), "rb")
+    if not f then
+        return {}
+    end
+    local types = {}
+    local in_globals = false
+    for line in f:lines() do
+        local stripped = line:gsub("//.*$", "")
+        if stripped:match("^%s*globals%s*$") then
+            in_globals = true
+        elseif stripped:match("^%s*endglobals%s*$") then
+            break
+        elseif in_globals then
+            local type_name, name = stripped:match("^%s*constant%s+([%a_][%w_]*)%s+array%s+([%a_][%w_]*)")
+            local is_array = type_name ~= nil
+            if not type_name then
+                type_name, name = stripped:match("^%s*constant%s+([%a_][%w_]*)%s+([%a_][%w_]*)")
+            end
+            if not type_name then
+                type_name, name = stripped:match("^%s*([%a_][%w_]*)%s+array%s+([%a_][%w_]*)")
+                is_array = type_name ~= nil
+            end
+            if not type_name then
+                type_name, name = stripped:match("^%s*([%a_][%w_]*)%s+([%a_][%w_]*)")
+            end
+            local type_id = type_name and GLOBAL_TYPE_IDS[type_name]
+            if type_id and name then
+                types[name] = {
+                    id = type_id,
+                    name = type_name,
+                    array = is_array == true,
+                }
+            end
+        end
+    end
+    f:close()
+    return types
 end
 
 local OBJ_TYPES = {
@@ -402,6 +521,71 @@ end
 
 function agent.remove_eca(idx, eca_type, eca_i)
     return YDT.ydt_remove_eca(idx, eca_type, eca_i) ~= 0
+end
+
+function agent.create_trigger(name)
+    return tonumber(YDT.ydt_create_trigger(name)) or 0
+end
+
+function agent.delete_trigger(idx)
+    return YDT.ydt_delete_trigger(idx) ~= 0
+end
+
+function agent.global_count()
+    return tonumber(YDT.ydt_get_global_count()) or 0
+end
+
+function agent.global_name(idx)
+    return to_str(YDT.ydt_get_global_name(idx))
+end
+
+function agent.global_type(idx)
+    local name = agent.global_name(idx)
+    local info = name and load_script_global_types()[name]
+    if info then
+        return info.id
+    end
+    local r = YDT.ydt_get_global_type(idx)
+    return r >= 0 and r or nil
+end
+
+function agent.global_value(idx)
+    return to_str(YDT.ydt_get_global_value(idx))
+end
+
+function agent.set_global_value(idx, value)
+    return YDT.ydt_set_global_value(idx, value) ~= 0
+end
+
+function agent.list_globals()
+    local count = agent.global_count()
+    local script_types = load_script_global_types()
+    local list = {}
+    for i = 0, count - 1 do
+        local name = agent.global_name(i)
+        local type_info = name and script_types[name]
+        list[#list + 1] = {
+            index = i,
+            name = name,
+            type = type_info and type_info.id or agent.global_type(i),
+            type_name = type_info and type_info.name or nil,
+            array = type_info and type_info.array or nil,
+            value = agent.global_value(i),
+        }
+    end
+    return list
+end
+
+function agent.global_diag()
+    local raw = to_str(YDT.ydt_global_diag())
+    if not raw then
+        return nil
+    end
+    local parsed, err = json.decode(raw)
+    if err then
+        return { raw = raw, error = err }
+    end
+    return parsed
 end
 
 local function read_eca_list(idx, eca_type)
@@ -1029,6 +1213,8 @@ function diag.status()
         dll_path = DLL_PATH,
         field_map_loaded = ok_field_map == true,
         trigger_count = trigger_count,
+        global_count = agent.global_count() or 0,
+        global_diag = agent.global_diag(),
         review_published = REVIEW_PUBLISHED,
         ai = ai.status(),
         last_error = LAST_ERROR,
@@ -1039,12 +1225,17 @@ function diag.smoke()
     local checks = {}
     local function check(name, fn)
         local ok, result = pcall(fn)
-        checks[#checks + 1] = {
+        local item_ok = ok and result ~= nil
+        local item = {
             name = name,
-            ok = ok and result ~= nil,
-            result = ok and result or nil,
-            error = ok and nil or tostring(result),
+            ok = item_ok,
         }
+        if item_ok then
+            item.result = result
+        else
+            item.error = tostring(result)
+        end
+        checks[#checks + 1] = item
     end
 
     check("diag.status", function()
@@ -1213,13 +1404,15 @@ if not server then
     return
 end
 
-local stop_channel = thread.channel("ydagent_stop")
+local stop_channel = open_channel("ydagent_stop")
 log.info("YDAgentServer: listening on 127.0.0.1:" .. tostring(PORT))
 
 while true do
-    local stop_ok, stop_msg = stop_channel:pop()
-    if stop_ok and stop_msg == "stop" then
-        break
+    if stop_channel then
+        local stop_ok, stop_msg = stop_channel:pop()
+        if stop_ok and stop_msg == "stop" then
+            break
+        end
     end
 
     local readable = socket.select({ server }, nil, 0.1)

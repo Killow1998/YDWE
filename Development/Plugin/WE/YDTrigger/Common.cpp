@@ -16,6 +16,30 @@ void _fastcall CC_Put_globals_Hook(DWORD OutClass);
 void _fastcall CC_Put_endglobals_Hook(DWORD OutClass);
 void _fastcall CC_Main_Hook(DWORD OutClass);
 
+extern "C" int agent_api_capture_globals_container(DWORD container);
+extern "C" void agent_api_capture_global_name(DWORD index, const char* name, DWORD raw_type, const char* type_name);
+
+void _fastcall GetGlobalVarName_Hook(DWORD This, DWORD EDX, DWORD index, char* dst, int len) {
+    agent_api_capture_globals_container(This);
+    if (GetGlobalVarName) {
+        GetGlobalVarName(This, EDX, index, dst, len);
+    } else if (dst && len > 0) {
+        dst[0] = '\0';
+    }
+    if (dst && len > 0) {
+        DWORD raw_type = 0xFFFFFFFF;
+        char type_name[64] = {};
+        __try {
+            raw_type = *(DWORD*)(This + 0x48);
+            BLZSStrCopy(type_name, (const char*)(This + 0x0C), sizeof(type_name));
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+            raw_type = 0xFFFFFFFF;
+            type_name[0] = '\0';
+        }
+        agent_api_capture_global_name(index, dst, raw_type, type_name);
+    }
+}
+
 DWORD g_nWEBase = 0x00000000;
 
 void Hook_Init() {
@@ -64,6 +88,7 @@ void All_Hook() {
     base::hook::install((uintptr_t*)&CC_Put_globals, (uintptr_t)CC_Put_globals_Hook);
     base::hook::install((uintptr_t*)&CC_Put_endglobals, (uintptr_t)CC_Put_endglobals_Hook);
     base::hook::install((uintptr_t*)&ChangeGUIType, (uintptr_t)ChangeGUIType_Hook);
+    base::hook::install((uintptr_t*)&GetGlobalVarName, (uintptr_t)GetGlobalVarName_Hook);
 
     TriggerParameterDialog_FuncList_Hook();
     TriggerParameterDialog_Type_Hook();

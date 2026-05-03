@@ -177,10 +177,11 @@ LSP 服务器 (`ydwe-lsp.exe`) 和客户端插件 (`lsp_client.dll`) 已实现�
 ### 第二阶段: AI 集成 (进行中 — 2026-05-01)
 
 #### Agent 通信层
-- [x] YDTrigger Agent API — 18 个 C 导出函数（ECA 读写 + 物体编辑器）
+- [x] YDTrigger Agent API — 25 个 C 导出函数（ECA 读写 + 全局变量 + 物体编辑器）
 - [x] JSON-RPC 服务端 — TCP 127.0.0.1:27118，后台线程
 - [x] Python 测试客户端 — ydagent_client.py
-- [x] 单元测试 — Catch2，18 用例，171 断言
+- [x] Python 运行时 smoke 脚本 — ydagent_smoke.py（支持 `--restore` 可逆验证）
+- [x] 单元测试 — Catch2，18 用例，169 断言
 
 #### AI 服务接口
 - [x] 设计 AI 服务接口 (支持 OpenAI / Claude / 本地 LLM)
@@ -201,10 +202,10 @@ LSP 服务器 (`ydwe-lsp.exe`) 和客户端插件 (`lsp_client.dll`) 已实现�
 ### 第三阶段: GUI 触发器 AI 助手 (进行中 — 2026-05-01)
 
 #### 进度
-1. ✅ YDTrigger Agent API — 18 个 C 导出函数（ECA 读写 + 物体编辑器二进制↔JSON）
+1. ✅ YDTrigger Agent API — 25 个 C 导出函数（ECA 读写 + 全局变量 + 物体编辑器二进制↔JSON）
 2. ✅ Lua 封装 (`YDAgentCore.lua`) + JSON-RPC 服务端 (`YDAgentServer.lua`)
 3. ✅ 物体编辑器 API — w3u/w3a/w3t/w3b/w3q 二进制解析与写入
-4. ✅ 单元测试 — Catch2, 18 用例, 171 断言
+4. ✅ 单元测试 — Catch2, 18 用例, 169 断言
 5. ✅ 物体编辑器属性映射（field_id 到中文名的 SLK 表查询）
 6. ✅ AI 模型接口配置层（Claude / OpenAI / 本地 LLM）
 7. ✅ AI 模型响应解析与安全操作校验
@@ -235,6 +236,24 @@ LSP 服务器 (`ydwe-lsp.exe`) 和客户端插件 (`lsp_client.dll`) 已实现�
   - RPC 错误统一返回 JSON-RPC 标准错误码：`-32700`、`-32600`、`-32601`、`-32602`、`-32603`。
   - 新增 `object.field_name`、`object.field_info`、`object.field_map`、`object.read_annotated`。
   - 新增 `ai.configure`、`ai.status`、`ai.build_request`、`ai.complete`。
+
+#### 2026-05-02 稳定性修复
+
+- `Development\Plugin\WE\YDTrigger\AgentAPI.cpp` / `Common.cpp`
+  - 全局变量容器改为通过已安装的 `GetGlobalVarName` hook 捕获，并在写入缓存前做结构校验。
+  - 移除未接线的 `g_orig_GetGlobalVarName` 方案，避免 Agent API 单独链接测试时依赖 `Common.cpp` 全局指针。
+- `Component\plugin\YDAgentAI.lua`
+  - 修复 `local` provider 表字段使用 Lua 关键字导致 worker 无法加载的问题。
+- `Component\plugin\YDAgentServer.lua` / `YDAgentServerWorker.lua`
+  - Loader 启动 TCP worker 时传入 `package.path`、`package.cpath`、DLL 路径和 Component 根目录。
+  - `bee.thread` channel 改为按需创建，避免首次启动时报 `Can't query channel`。
+  - 新增诊断 RPC：`diag.status`、`diag.smoke`。
+  - 新增全局变量 RPC：`agent.global_count`、`agent.global_name`、`agent.global_type`、`agent.global_value`、`agent.set_global_value`、`agent.list_globals`。
+  - 使用测试桩完成本机 loopback：`diag.status`、`diag.smoke`、`agent.list_globals` 均通过。
+- `Development\AI\ydagent_smoke.py`
+  - 新增运行时 smoke 脚本：轮询 TCP 可用性、执行 `diag.status`/`diag.smoke`、读取触发器和全局变量快照。
+  - `--restore` 模式下执行可逆变更：重命名触发器 + 修改全局变量并校验恢复。
+  - 当触发器或全局变量为空时拒绝执行破坏性操作。
 
 #### 2026-05-01 下一阶段增量实现
 
@@ -282,7 +301,7 @@ LSP 服务器 (`ydwe-lsp.exe`) 和客户端插件 (`lsp_client.dll`) 已实现�
 - `Component\plugin\YDAgentAI.lua`
   - 新增 `generate_plan`，封装 `complete(..., { parse = true })` 并要求返回可校验计划。
 - `Component\plugin\YDAgentUI.lua`
-  - 新增 `show_review_panel`，显示最近 queued review plan。
+  - 新增 `show_review_panel`，显示最新 queued review plan。
   - Review Panel 支持刷新和 `Approve Next Apply` 一次性授权。
 - `Component\script\ydwe\ydwe_on_menu.lua`
   - `YDWE AI Agent` 菜单新增 `Review Panel`。
@@ -406,11 +425,16 @@ AI 提示:
 ### 剩余主要工作
 
 1. **运行时验证和修 bug**
+   - 2026-05-03 已完成真实 YDWE 触发器读取和可逆改名验证。
+   - 已修复 TCP worker 在真实 YDWE 中启动和持续监听的问题。
+   - `diag.status` / `diag.smoke` 通过，保存触发编译后 `agent.list_triggers` 可读到真实地图触发器。
+   - `agent.get_eca_tree` 和 `agent.compress_context` 已能读取真实 ECA 和压缩上下文。
+   - `agent.set_trigger_name` 已完成可逆验证并恢复原名。
+   - `agent.list_globals` 已在真实 YDWE 中完成名称/类型读取验证：保存触发编译后返回 17 个真实全局变量，且能区分 `integer`、`real`、`unit`、`trigger`。
+   - 全局变量默认值/当前值读取和可逆改值仍待定位。
    - 验证菜单是否正常出现。
-   - 验证 JSON-RPC server 是否稳定监听 `127.0.0.1:27118`。
    - 验证 UI 内置 RPC client 是否能连接 Agent。
    - 验证 Generate Panel / Review Panel / apply token / `ai.apply_plan` 全链路。
-   - 预计需要 1 - 3 轮调试修改。
 
 2. **完整触发器 ↔ 自然语言转换器**
    - 触发器转自然语言：中文解释模板、本地化 ECA 名称、参数含义、风险识别。
@@ -438,7 +462,7 @@ AI 提示:
 
 6. **测试脚本和诊断工具**
    - 外部 JSON-RPC smoke test：`agent.list_triggers`、`agent.summarize_trigger`、`ai.validate_plan`、`ai.apply_plan` dry-run、`ai.queue_review`。
-   - 编辑器内诊断：server alive、provider status、最近错误、通道状态。
+   - 编辑器内诊断：server alive、provider status、`last_error`、通道状态。
    - 避免使用此前会卡住的 Debug `lua.exe` 语法检查流程。
 
 ### 推荐推进顺序

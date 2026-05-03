@@ -70,6 +70,19 @@ __declspec(dllexport) int __cdecl ydt_add_eca(int trig_index, int eca_type);
 // Remove an ECA node and free its memory. Returns 1 on success.
 __declspec(dllexport) int __cdecl ydt_remove_eca(int trig_index, int eca_type, int eca_idx);
 
+// Create/delete triggers. Create returns 1 if added to the tree, 0 if cached only or failed.
+__declspec(dllexport) int __cdecl ydt_create_trigger(const char* name);
+__declspec(dllexport) int __cdecl ydt_delete_trigger(int trig_index);
+
+// --- Global variable access ---
+
+__declspec(dllexport) int __cdecl ydt_get_global_count(void);
+__declspec(dllexport) const char* __cdecl ydt_get_global_name(int index);
+__declspec(dllexport) int __cdecl ydt_get_global_type(int index);
+__declspec(dllexport) const char* __cdecl ydt_get_global_value(int index);
+__declspec(dllexport) int __cdecl ydt_set_global_value(int index, const char* value);
+__declspec(dllexport) const char* __cdecl ydt_global_diag(void);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

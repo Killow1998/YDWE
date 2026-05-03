@@ -248,6 +248,71 @@ static DWORD find_root_from_triggers() {
 // ===== Global variable support =====
 
 static DWORD g_globals_container = 0;
+static DWORD g_global_capture_attempts = 0;
+static DWORD g_global_capture_successes = 0;
+static DWORD g_global_last_candidate = 0;
+static DWORD g_global_last_count = 0;
+static DWORD g_global_last_varray = 0;
+static DWORD g_global_last_fail = 0;
+static DWORD g_global_last_type_raw = 0xFFFFFFFF;
+static DWORD g_global_last_type = 0xFFFFFFFF;
+static char g_global_last_name[260] = {};
+static char g_global_last_type_name[64] = {};
+static char g_global_diag_buf[512] = {};
+
+static bool is_valid_global_var_container(DWORD cand) {
+    g_global_last_fail = 0;
+    if (!cand) {
+        g_global_last_fail = 1;
+        return false;
+    }
+    __try {
+        DWORD count = *(DWORD*)(cand + 0x128);
+        g_global_last_count = count;
+        if (count == 0) {
+            g_global_last_fail = 2;
+            return false;
+        }
+        if (count > 5000) {
+            g_global_last_fail = 3;
+            return false;
+        }
+        DWORD* varray = *(DWORD**)(cand + 0x12C);
+        g_global_last_varray = (DWORD)varray;
+        if (!varray) {
+            g_global_last_fail = 4;
+            return false;
+        }
+
+        DWORD sample_count = count < 8 ? count : 8;
+        for (DWORD i = 0; i < sample_count; i++) {
+            DWORD var = varray[i];
+            if (!var) {
+                g_global_last_fail = 5;
+                return false;
+            }
+            (void)*(DWORD*)(var + 0x48);
+        }
+        return true;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        g_global_last_fail = 99;
+        return false;
+    }
+}
+
+static bool capture_global_var_container(DWORD container) {
+    g_global_capture_attempts++;
+    g_global_last_candidate = container;
+    if (!is_valid_global_var_container(container)) return false;
+    g_globals_container = container;
+    g_global_capture_successes++;
+    __try {
+        g_global_last_count = *(DWORD*)(container + 0x128);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        g_global_last_count = 0;
+    }
+    return true;
+}
 
 static DWORD find_global_var_container() {
     DWORD base = g_nWEBase;
@@ -255,22 +320,14 @@ static DWORD find_global_var_container() {
     __try {
         for (DWORD addr = base + 0x00600000; addr < base + 0x00800000; addr += 4) {
             DWORD cand = *(DWORD*)addr;
-            if (cand < base || cand > base + 0x03000000) continue;
-            DWORD vc = *(DWORD*)(cand + 0x128);
-            if (vc < 1 || vc > 5000) continue;
-            DWORD* va = *(DWORD**)(cand + 0x12C);
-            if (!va) continue;
-            DWORD v0 = va[0];
-            if (!v0 || v0 < base || v0 > base + 0x03000000) continue;
-            g_globals_container = cand;
+            if (!is_valid_global_var_container(cand)) continue;
+            DWORD count = *(DWORD*)(cand + 0x128);
+            if (count == 0) continue;
+            if (!capture_global_var_container(cand)) continue;
             return cand;
         }
     } __except(EXCEPTION_EXECUTE_HANDLER) {}
     return 0;
-}
-
-extern "C" void agent_api_capture_globals_container(DWORD container) {
-    if (container) g_globals_container = container;
 }
 
 struct GlobalVar {
@@ -279,10 +336,69 @@ struct GlobalVar {
     char value[260];
 };
 static std::vector<GlobalVar> g_globals;
+static std::vector<GlobalVar> g_captured_globals;
+
+static DWORD map_global_type_name(const char* type_name) {
+    if (!type_name || !*type_name) return 0xFFFFFFFF;
+    for (DWORD i = CC_TYPE__begin + 1; i < CC_TYPE__end; i++) {
+        if (BLZSStrCmp(type_name, TypeName[i], 0xFFFFFFFF) == 0) {
+            return i;
+        }
+    }
+    return 0xFFFFFFFF;
+}
+
+static DWORD map_global_type_raw(DWORD raw_type) {
+    switch (raw_type) {
+    case CC_VARTYPE_integer: return CC_TYPE_integer;
+    case CC_VARTYPE_real: return CC_TYPE_real;
+    case CC_VARTYPE_boolean: return CC_TYPE_boolean;
+    case CC_VARTYPE_string:
+    case CC_VARTYPE_StringExt: return CC_TYPE_string;
+    case CC_VARTYPE_timer: return CC_TYPE_timer;
+    default: break;
+    }
+    if (raw_type > CC_TYPE__begin && raw_type < CC_TYPE__end) return raw_type;
+    return 0xFFFFFFFF;
+}
+
+static void add_captured_global(DWORD index, const char* name, DWORD raw_type, const char* type_name) {
+    if (!name || !*name) return;
+    if (index >= 5000) return;
+    DWORD mapped_type = map_global_type_name(type_name);
+    bool mapped_from_name = mapped_type != 0xFFFFFFFF;
+    if (mapped_type == 0xFFFFFFFF) {
+        mapped_type = map_global_type_raw(raw_type);
+    }
+    g_global_last_type_raw = raw_type;
+    g_global_last_type = mapped_type;
+    if (mapped_from_name) {
+        BLZSStrCopy(g_global_last_type_name, type_name, sizeof(g_global_last_type_name));
+    } else {
+        g_global_last_type_name[0] = '\0';
+    }
+    for (size_t i = 0; i < g_captured_globals.size(); i++) {
+        if (BLZSStrCmp(g_captured_globals[i].name, name, 0xFFFFFFFF) == 0) {
+            if (g_captured_globals[i].type == 0xFFFFFFFF && mapped_type != 0xFFFFFFFF) {
+                g_captured_globals[i].type = mapped_type;
+            }
+            return;
+        }
+    }
+    GlobalVar gv = {};
+    BLZSStrCopy(gv.name, name, 260);
+    gv.type = mapped_type;
+    gv.value[0] = '\0';
+    g_captured_globals.push_back(gv);
+    BLZSStrCopy(g_global_last_name, name, 260);
+}
 
 static void refresh_globals() {
     g_globals.clear();
-    if (!g_globals_container) return;
+    if (!g_globals_container || !g_captured_globals.empty()) {
+        g_globals = g_captured_globals;
+        return;
+    }
     DWORD base = g_nWEBase;
     __try {
         DWORD count = *(DWORD*)(g_globals_container + 0x128);
@@ -308,6 +424,17 @@ static void refresh_globals() {
 }
 
 } // namespace agent_api
+
+extern "C" int agent_api_capture_globals_container(DWORD container) {
+    return agent_api::capture_global_var_container(container) ? 1 : 0;
+}
+
+extern "C" void agent_api_capture_global_name(DWORD index, const char* name, DWORD raw_type, const char* type_name) {
+    __try {
+        agent_api::add_captured_global(index, name, raw_type, type_name);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+    }
+}
 
 // Called from CC_PutTrigger_Hook during compilation to build trigger list
 extern "C" void agent_api_add_trigger(DWORD trigger_ptr) {
@@ -850,9 +977,33 @@ static int delete_trigger_impl(DWORD trig, DWORD root) {
 
 int __cdecl ydt_get_global_count(void) {
     using namespace agent_api;
-    if (!g_globals_container) { refresh_globals(); find_global_var_container(); refresh_globals(); }
+    if (!g_globals_container && g_captured_globals.empty()) { refresh_globals(); find_global_var_container(); refresh_globals(); }
     if (g_globals.empty()) refresh_globals();
     return (int)g_globals.size();
+}
+
+const char* __cdecl ydt_global_diag(void) {
+    using namespace agent_api;
+    if (!g_globals_container) {
+        find_global_var_container();
+        refresh_globals();
+    }
+    BLZSStrPrintf(g_global_diag_buf, sizeof(g_global_diag_buf),
+        "{\"container\":%u,\"capture_attempts\":%u,\"capture_successes\":%u,\"last_candidate\":%u,\"last_count\":%u,\"last_varray\":%u,\"last_fail\":%u,\"captured_count\":%u,\"last_name\":\"%s\",\"last_type\":%u,\"last_type_raw\":%u,\"last_type_name\":\"%s\",\"cached_count\":%u}",
+        g_globals_container,
+        g_global_capture_attempts,
+        g_global_capture_successes,
+        g_global_last_candidate,
+        g_global_last_count,
+        g_global_last_varray,
+        g_global_last_fail,
+        (DWORD)g_captured_globals.size(),
+        g_global_last_name,
+        g_global_last_type,
+        g_global_last_type_raw,
+        g_global_last_type_name,
+        (DWORD)g_globals.size());
+    return g_global_diag_buf;
 }
 
 const char* __cdecl ydt_get_global_name(int index) {
