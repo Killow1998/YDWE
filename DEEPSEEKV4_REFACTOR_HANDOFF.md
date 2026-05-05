@@ -188,7 +188,9 @@ Expected result:
 - Reversible trigger rename passed: `对战初始化` -> `对战初始化__YDAGENT_SMOKE__` -> `对战初始化`.
 - `agent.list_globals` returned 17 real global variable names after `GetGlobalVarName_Hook` captured names during save/compile, including `udg_unit`, `udg_lv`, `udg_angle`, `udg_RunIndex`, and `gg_trg_round`.
 - `YDAgentServerWorker.lua` merges declaration-derived `type`, `type_name`, and `array` from `Development\Component\logs\currentmapscript.j`; real GUI validation distinguished `integer`, `real`, `unit`, and `trigger`.
-- Global variable value read and `agent.set_global_value` remain follow-up work.
+- `agent.global_value` returns declaration initial values from `currentmapscript.j` for declared globals; validated `udg_RunIndex=0`, `udg_data=0`, `gg_trg_round=null`, and array globals such as `udg_unit` return `null`.
+- Disassembly/probes identified the name layout used by `GetGlobalVarName`: `This+0x08` is count and `This+0x0C + index * 0x1C0 + 0x2E` is the name field. `0x005C6840` reads WE GUI display/parse text, not a safe runtime value/write path.
+- Runtime storage value read and `agent.set_global_value` remain follow-up work; declared globals currently return `false` for mutation.
 
 ### Trigger Mutation Check
 

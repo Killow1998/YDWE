@@ -430,8 +430,9 @@ AI 提示:
    - `diag.status` / `diag.smoke` 通过，保存触发编译后 `agent.list_triggers` 可读到真实地图触发器。
    - `agent.get_eca_tree` 和 `agent.compress_context` 已能读取真实 ECA 和压缩上下文。
    - `agent.set_trigger_name` 已完成可逆验证并恢复原名。
-   - `agent.list_globals` 已在真实 YDWE 中完成名称/类型读取验证：保存触发编译后返回 17 个真实全局变量，且能区分 `integer`、`real`、`unit`、`trigger`。
-   - 全局变量默认值/当前值读取和可逆改值仍待定位。
+   - `agent.list_globals` 已在真实 YDWE 中完成名称/类型/声明初始值读取验证：保存触发编译后返回 17 个真实全局变量，且能区分 `integer`、`real`、`unit`、`trigger`。
+   - 全局变量数组值当前返回 `null`；标量声明初始值已验证 `udg_RunIndex=0`、`udg_data=0`、`gg_trg_round=null`。
+   - 全局变量运行期真实存储值和可逆改值仍待定位；已确认 `0x005C6840` 返回 WE GUI 显示/解析文本，不是安全写入路径。
    - 验证菜单是否正常出现。
    - 验证 UI 内置 RPC client 是否能连接 Agent。
    - 验证 Generate Panel / Review Panel / apply token / `ai.apply_plan` 全链路。

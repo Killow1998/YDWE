@@ -169,7 +169,7 @@ All tests passed (169 assertions in 18 test cases)
 
 ### Agent 真实 GUI 验证记录
 
-2026-05-03 已完成真实 YDWE 编辑器进程内触发器读取、触发器可逆修改和全局变量名称/类型读取验证。
+2026-05-03 已完成真实 YDWE 编辑器进程内触发器读取、触发器可逆修改和全局变量名称/类型/声明初始值读取验证。
 
 已验证清单：
 - 启动 `Development\Component\YDWE.exe` 并加载 `Development\Component\example(演示地图)\系统\中心计时器-单位环绕(全局变量版).w3x`
@@ -182,9 +182,12 @@ All tests passed (169 assertions in 18 test cases)
 - 修复全局变量读取诊断链路：`ydt_global_diag` 暴露捕获状态，`GetGlobalVarName_Hook` 调用原始函数后记录返回名称
 - 保存触发编译后，`agent.list_globals` 返回 17 个真实全局变量名，包括 `udg_unit`、`udg_lv`、`udg_angle`、`udg_RunIndex`、`gg_trg_round`
 - `YDAgentServerWorker.lua` 从 `Development\Component\logs\currentmapscript.j` 的 `globals` 段解析变量声明，合并 `type`、`type_name` 和 `array` 到 `agent.list_globals`；真实 GUI 中已验证 `integer`、`real`、`unit`、`trigger` 类型可区分
+- `agent.global_value` 当前以 `currentmapscript.j` 声明初始值为准；真实 GUI 已验证 `udg_RunIndex=0`、`udg_data=0`、`gg_trg_round=null`，数组变量如 `udg_unit` 返回 `null`
+- 反汇编确认 `GetGlobalVarName` 使用 `This+0x08` 作为全局变量数量、`This+0x0C + index * 0x1C0 + 0x2E` 作为变量名；`0x005C6840` 可读到 WE GUI 显示/解析文本，但不等同于安全运行期值或可写存储
 
 未完成清单：
-- 全局变量当前已完成名称和类型读取；默认值/当前值读取和 `agent.set_global_value` 可逆改值仍待定位
+- 全局变量当前已完成名称、类型和声明初始值读取；运行期真实存储值读取和 `agent.set_global_value` 可逆改值仍待定位
+- `agent.set_global_value` 对声明型真实全局变量当前返回 `false`，避免只改 Agent 缓存造成假成功
 - 本次演示地图保存编译会因地图内生成 JASS 错误中断，但不影响触发器缓存捕获和 RPC 读写验证
 
 ## ⚠️ 已知问题

@@ -391,6 +391,10 @@ local GLOBAL_TYPE_IDS = {
     degree = 38,
 }
 
+local function trim(s)
+    return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
 local function load_script_global_types()
     local f = io.open(path_join(COMPONENT_ROOT, "logs\\currentmapscript.j"), "rb")
     if not f then
@@ -405,17 +409,19 @@ local function load_script_global_types()
         elseif stripped:match("^%s*endglobals%s*$") then
             break
         elseif in_globals then
-            local type_name, name = stripped:match("^%s*constant%s+([%a_][%w_]*)%s+array%s+([%a_][%w_]*)")
+            local value = stripped:match("=%s*(.-)%s*$")
+            local decl = stripped:gsub("=%s*.-%s*$", "")
+            local type_name, name = decl:match("^%s*constant%s+([%a_][%w_]*)%s+array%s+([%a_][%w_]*)")
             local is_array = type_name ~= nil
             if not type_name then
-                type_name, name = stripped:match("^%s*constant%s+([%a_][%w_]*)%s+([%a_][%w_]*)")
+                type_name, name = decl:match("^%s*constant%s+([%a_][%w_]*)%s+([%a_][%w_]*)")
             end
             if not type_name then
-                type_name, name = stripped:match("^%s*([%a_][%w_]*)%s+array%s+([%a_][%w_]*)")
+                type_name, name = decl:match("^%s*([%a_][%w_]*)%s+array%s+([%a_][%w_]*)")
                 is_array = type_name ~= nil
             end
             if not type_name then
-                type_name, name = stripped:match("^%s*([%a_][%w_]*)%s+([%a_][%w_]*)")
+                type_name, name = decl:match("^%s*([%a_][%w_]*)%s+([%a_][%w_]*)")
             end
             local type_id = type_name and GLOBAL_TYPE_IDS[type_name]
             if type_id and name then
@@ -423,6 +429,7 @@ local function load_script_global_types()
                     id = type_id,
                     name = type_name,
                     array = is_array == true,
+                    initial_value = value and trim(value) or nil,
                 }
             end
         end
@@ -550,10 +557,23 @@ function agent.global_type(idx)
 end
 
 function agent.global_value(idx)
+    local name = agent.global_name(idx)
+    local info = name and load_script_global_types()[name]
+    if info and info.array then
+        return nil
+    end
+    if info then
+        return info.initial_value
+    end
     return to_str(YDT.ydt_get_global_value(idx))
 end
 
 function agent.set_global_value(idx, value)
+    local name = agent.global_name(idx)
+    local info = name and load_script_global_types()[name]
+    if info then
+        return false
+    end
     return YDT.ydt_set_global_value(idx, value) ~= 0
 end
 
@@ -564,13 +584,21 @@ function agent.list_globals()
     for i = 0, count - 1 do
         local name = agent.global_name(i)
         local type_info = name and script_types[name]
+        local array = nil
+        if type_info ~= nil then
+            array = type_info.array
+        end
+        local value = nil
+        if not array then
+            value = type_info and type_info.initial_value or agent.global_value(i)
+        end
         list[#list + 1] = {
             index = i,
             name = name,
             type = type_info and type_info.id or agent.global_type(i),
             type_name = type_info and type_info.name or nil,
-            array = type_info ~= nil and type_info.array or nil,
-            value = agent.global_value(i),
+            array = array,
+            value = value,
         }
     end
     return list
@@ -1350,7 +1378,7 @@ local function handle_request(data)
     return json.encode({
         jsonrpc = "2.0",
         id = req.id ~= nil and req.id or json.null,
-        result = result ~= nil and result or json.null,
+        result = result == nil and json.null or result,
     })
 end
 

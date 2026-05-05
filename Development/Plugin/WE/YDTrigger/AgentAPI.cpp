@@ -256,9 +256,50 @@ static DWORD g_global_last_varray = 0;
 static DWORD g_global_last_fail = 0;
 static DWORD g_global_last_type_raw = 0xFFFFFFFF;
 static DWORD g_global_last_type = 0xFFFFFFFF;
+static DWORD g_global_last_this = 0;
+static DWORD g_global_last_index = 0xFFFFFFFF;
+static DWORD g_global_probe_008 = 0;
+static DWORD g_global_probe_00c = 0;
+static DWORD g_global_probe_020 = 0;
+static DWORD g_global_probe_048 = 0;
+static DWORD g_global_probe_04c = 0;
+static DWORD g_global_probe_128 = 0;
+static DWORD g_global_probe_12c = 0;
+static DWORD g_global_probe_178 = 0;
+static DWORD g_global_alt_count = 0;
+static DWORD g_global_alt_varray = 0;
+static DWORD g_global_alt_entry = 0;
+static DWORD g_global_alt_entry_008 = 0;
+static DWORD g_global_alt_entry_00c = 0;
+static DWORD g_global_alt_entry_020 = 0;
+static DWORD g_global_alt_entry_048 = 0;
+static DWORD g_global_alt_entry_04c = 0;
+static DWORD g_global_alt_entry_128 = 0;
+static DWORD g_global_alt_entry_12c = 0;
+static DWORD g_global_alt_entry_178 = 0;
+static DWORD g_global_alt_name_offset = 0xFFFFFFFF;
+static DWORD g_global_alt_name_back_020 = 0;
+static DWORD g_global_alt_name_back_01c = 0;
+static DWORD g_global_alt_name_back_018 = 0;
+static DWORD g_global_alt_name_back_014 = 0;
+static DWORD g_global_alt_name_back_010 = 0;
+static DWORD g_global_alt_name_back_00c = 0;
+static DWORD g_global_alt_name_back_008 = 0;
+static DWORD g_global_alt_name_back_004 = 0;
+static DWORD g_global_stride_entry = 0;
+static char g_global_stride_name[260] = {};
+static char g_global_stride_010[260] = {};
+static char g_global_stride_092[260] = {};
+static DWORD g_global_stride_000 = 0;
+static DWORD g_global_stride_004 = 0;
+static DWORD g_global_stride_008 = 0;
+static DWORD g_global_stride_00c = 0;
+static DWORD g_global_stride_010_dword = 0;
+static DWORD g_global_stride_02c = 0;
+static DWORD g_global_stride_092_dword = 0;
 static char g_global_last_name[260] = {};
 static char g_global_last_type_name[64] = {};
-static char g_global_diag_buf[512] = {};
+static char g_global_diag_buf[4096] = {};
 
 static bool is_valid_global_var_container(DWORD cand) {
     g_global_last_fail = 0;
@@ -362,9 +403,109 @@ static DWORD map_global_type_raw(DWORD raw_type) {
     return 0xFFFFFFFF;
 }
 
-static void add_captured_global(DWORD index, const char* name, DWORD raw_type, const char* type_name) {
+static void add_captured_global(DWORD index, const char* name, DWORD raw_type, const char* type_name, DWORD context) {
     if (!name || !*name) return;
     if (index >= 5000) return;
+    g_global_last_this = context;
+    g_global_last_index = index;
+    BLZSStrCopy(g_global_last_name, name, 260);
+    g_global_probe_008 = 0;
+    g_global_probe_00c = 0;
+    g_global_probe_020 = 0;
+    g_global_probe_048 = 0;
+    g_global_probe_04c = 0;
+    g_global_probe_128 = 0;
+    g_global_probe_12c = 0;
+    g_global_probe_178 = 0;
+    g_global_alt_count = 0;
+    g_global_alt_varray = 0;
+    g_global_alt_entry = 0;
+    g_global_alt_entry_008 = 0;
+    g_global_alt_entry_00c = 0;
+    g_global_alt_entry_020 = 0;
+    g_global_alt_entry_048 = 0;
+    g_global_alt_entry_04c = 0;
+    g_global_alt_entry_128 = 0;
+    g_global_alt_entry_12c = 0;
+    g_global_alt_entry_178 = 0;
+    g_global_alt_name_offset = 0xFFFFFFFF;
+    g_global_alt_name_back_020 = 0;
+    g_global_alt_name_back_01c = 0;
+    g_global_alt_name_back_018 = 0;
+    g_global_alt_name_back_014 = 0;
+    g_global_alt_name_back_010 = 0;
+    g_global_alt_name_back_00c = 0;
+    g_global_alt_name_back_008 = 0;
+    g_global_alt_name_back_004 = 0;
+    g_global_stride_entry = 0;
+    g_global_stride_name[0] = '\0';
+    g_global_stride_010[0] = '\0';
+    g_global_stride_092[0] = '\0';
+    g_global_stride_000 = 0;
+    g_global_stride_004 = 0;
+    g_global_stride_008 = 0;
+    g_global_stride_00c = 0;
+    g_global_stride_010_dword = 0;
+    g_global_stride_02c = 0;
+    g_global_stride_092_dword = 0;
+    __try {
+        g_global_probe_008 = *(DWORD*)(context + 0x008);
+        g_global_probe_00c = *(DWORD*)(context + 0x00C);
+        g_global_probe_020 = *(DWORD*)(context + 0x020);
+        g_global_probe_048 = *(DWORD*)(context + 0x048);
+        g_global_probe_04c = *(DWORD*)(context + 0x04C);
+        g_global_probe_128 = *(DWORD*)(context + 0x128);
+        g_global_probe_12c = *(DWORD*)(context + 0x12C);
+        g_global_probe_178 = *(DWORD*)(context + 0x178);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+    }
+    g_global_alt_count = g_global_probe_008;
+    g_global_alt_varray = g_global_probe_00c;
+    __try {
+        g_global_alt_count = g_global_probe_008;
+        g_global_alt_varray = g_global_probe_00c;
+        if (g_global_alt_varray && index < g_global_alt_count && g_global_alt_count < 5000) {
+            DWORD entry = ((DWORD*)g_global_alt_varray)[index];
+            g_global_alt_entry = entry;
+            if (entry) {
+                g_global_alt_entry_008 = *(DWORD*)(entry + 0x008);
+                g_global_alt_entry_00c = *(DWORD*)(entry + 0x00C);
+                g_global_alt_entry_020 = *(DWORD*)(entry + 0x020);
+                g_global_alt_entry_048 = *(DWORD*)(entry + 0x048);
+                g_global_alt_entry_04c = *(DWORD*)(entry + 0x04C);
+                g_global_alt_entry_128 = *(DWORD*)(entry + 0x128);
+                g_global_alt_entry_12c = *(DWORD*)(entry + 0x12C);
+                g_global_alt_entry_178 = *(DWORD*)(entry + 0x178);
+            }
+        }
+        if (g_global_alt_varray) {
+            DWORD stride_entry = g_global_alt_varray + index * 0x1C0;
+            g_global_stride_entry = stride_entry;
+            g_global_stride_000 = *(DWORD*)(stride_entry + 0x000);
+            g_global_stride_004 = *(DWORD*)(stride_entry + 0x004);
+            g_global_stride_008 = *(DWORD*)(stride_entry + 0x008);
+            g_global_stride_00c = *(DWORD*)(stride_entry + 0x00C);
+            g_global_stride_010_dword = *(DWORD*)(stride_entry + 0x010);
+            g_global_stride_02c = *(DWORD*)(stride_entry + 0x02C);
+            g_global_stride_092_dword = *(DWORD*)(stride_entry + 0x092);
+            BLZSStrCopy(g_global_stride_name, (const char*)(stride_entry + 0x02E), sizeof(g_global_stride_name));
+        }
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        g_global_alt_entry = 0;
+        g_global_alt_entry_008 = 0;
+        g_global_alt_entry_00c = 0;
+        g_global_alt_entry_020 = 0;
+        g_global_alt_entry_048 = 0;
+        g_global_alt_entry_04c = 0;
+        g_global_alt_entry_128 = 0;
+        g_global_alt_entry_12c = 0;
+        g_global_alt_entry_178 = 0;
+        g_global_alt_name_offset = 0xFFFFFFFF;
+        g_global_stride_entry = 0;
+        g_global_stride_name[0] = '\0';
+        g_global_stride_010[0] = '\0';
+        g_global_stride_092[0] = '\0';
+    }
     DWORD mapped_type = map_global_type_name(type_name);
     bool mapped_from_name = mapped_type != 0xFFFFFFFF;
     if (mapped_type == 0xFFFFFFFF) {
@@ -390,7 +531,6 @@ static void add_captured_global(DWORD index, const char* name, DWORD raw_type, c
     gv.type = mapped_type;
     gv.value[0] = '\0';
     g_captured_globals.push_back(gv);
-    BLZSStrCopy(g_global_last_name, name, 260);
 }
 
 static void refresh_globals() {
@@ -429,9 +569,9 @@ extern "C" int agent_api_capture_globals_container(DWORD container) {
     return agent_api::capture_global_var_container(container) ? 1 : 0;
 }
 
-extern "C" void agent_api_capture_global_name(DWORD index, const char* name, DWORD raw_type, const char* type_name) {
+extern "C" void agent_api_capture_global_name(DWORD index, const char* name, DWORD raw_type, const char* type_name, DWORD context) {
     __try {
-        agent_api::add_captured_global(index, name, raw_type, type_name);
+        agent_api::add_captured_global(index, name, raw_type, type_name, context);
     } __except(EXCEPTION_EXECUTE_HANDLER) {
     }
 }
@@ -989,7 +1129,7 @@ const char* __cdecl ydt_global_diag(void) {
         refresh_globals();
     }
     BLZSStrPrintf(g_global_diag_buf, sizeof(g_global_diag_buf),
-        "{\"container\":%u,\"capture_attempts\":%u,\"capture_successes\":%u,\"last_candidate\":%u,\"last_count\":%u,\"last_varray\":%u,\"last_fail\":%u,\"captured_count\":%u,\"last_name\":\"%s\",\"last_type\":%u,\"last_type_raw\":%u,\"last_type_name\":\"%s\",\"cached_count\":%u}",
+        "{\"container\":%u,\"capture_attempts\":%u,\"capture_successes\":%u,\"last_candidate\":%u,\"last_count\":%u,\"last_varray\":%u,\"last_fail\":%u,\"captured_count\":%u,\"last_name\":\"%s\",\"last_type\":%u,\"last_type_raw\":%u,\"last_type_name\":\"%s\",\"last_this\":%u,\"last_index\":%u,\"probe_008\":%u,\"probe_00c\":%u,\"probe_020\":%u,\"probe_048\":%u,\"probe_04c\":%u,\"probe_128\":%u,\"probe_12c\":%u,\"probe_178\":%u,\"alt_count\":%u,\"alt_varray\":%u,\"alt_entry\":%u,\"alt_entry_008\":%u,\"alt_entry_00c\":%u,\"alt_entry_020\":%u,\"alt_entry_048\":%u,\"alt_entry_04c\":%u,\"alt_entry_128\":%u,\"alt_entry_12c\":%u,\"alt_entry_178\":%u,\"alt_name_offset\":%u,\"alt_name_back_020\":%u,\"alt_name_back_01c\":%u,\"alt_name_back_018\":%u,\"alt_name_back_014\":%u,\"alt_name_back_010\":%u,\"alt_name_back_00c\":%u,\"alt_name_back_008\":%u,\"alt_name_back_004\":%u,\"stride_entry\":%u,\"stride_name\":\"%s\",\"stride_010\":\"%s\",\"stride_092\":\"%s\",\"stride_000\":%u,\"stride_004\":%u,\"stride_008\":%u,\"stride_00c\":%u,\"stride_010_dword\":%u,\"stride_02c\":%u,\"stride_092_dword\":%u,\"cached_count\":%u}",
         g_globals_container,
         g_global_capture_attempts,
         g_global_capture_successes,
@@ -1002,6 +1142,47 @@ const char* __cdecl ydt_global_diag(void) {
         g_global_last_type,
         g_global_last_type_raw,
         g_global_last_type_name,
+        g_global_last_this,
+        g_global_last_index,
+        g_global_probe_008,
+        g_global_probe_00c,
+        g_global_probe_020,
+        g_global_probe_048,
+        g_global_probe_04c,
+        g_global_probe_128,
+        g_global_probe_12c,
+        g_global_probe_178,
+        g_global_alt_count,
+        g_global_alt_varray,
+        g_global_alt_entry,
+        g_global_alt_entry_008,
+        g_global_alt_entry_00c,
+        g_global_alt_entry_020,
+        g_global_alt_entry_048,
+        g_global_alt_entry_04c,
+        g_global_alt_entry_128,
+        g_global_alt_entry_12c,
+        g_global_alt_entry_178,
+        g_global_alt_name_offset,
+        g_global_alt_name_back_020,
+        g_global_alt_name_back_01c,
+        g_global_alt_name_back_018,
+        g_global_alt_name_back_014,
+        g_global_alt_name_back_010,
+        g_global_alt_name_back_00c,
+        g_global_alt_name_back_008,
+        g_global_alt_name_back_004,
+        g_global_stride_entry,
+        g_global_stride_name,
+        g_global_stride_010,
+        g_global_stride_092,
+        g_global_stride_000,
+        g_global_stride_004,
+        g_global_stride_008,
+        g_global_stride_00c,
+        g_global_stride_010_dword,
+        g_global_stride_02c,
+        g_global_stride_092_dword,
         (DWORD)g_globals.size());
     return g_global_diag_buf;
 }
@@ -1021,22 +1202,23 @@ int __cdecl ydt_get_global_type(int index) {
 const char* __cdecl ydt_get_global_value(int index) {
     using namespace agent_api;
     if (index < 0 || index >= (int)g_globals.size()) return nullptr;
+    if (GetGlobalVarValue && g_global_last_this) {
+        char value[260] = {};
+        __try {
+            GetGlobalVarValue(g_global_last_this, 0, (DWORD)index, value, sizeof(value));
+            if (value[0]) {
+                return alloc_str(value);
+            }
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+        }
+    }
     return alloc_str(g_globals[index].value);
 }
 
 int __cdecl ydt_set_global_value(int index, const char* value) {
     using namespace agent_api;
     if (index < 0 || index >= (int)g_globals.size() || !value) return 0;
-    __try {
-        BLZSStrCopy(g_globals[index].value, value, 260);
-        if (g_globals_container) {
-            DWORD* varray = *(DWORD**)(g_globals_container + 0x12C);
-            if (varray && varray[index]) {
-                BLZSStrCopy((char*)(varray[index] + 0x4C), value, 260);
-            }
-        }
-        return 1;
-    } __except(EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    return 0;
 }
 
 int __cdecl ydt_delete_trigger(int trig_index) {

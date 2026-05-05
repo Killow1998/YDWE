@@ -17,7 +17,7 @@ void _fastcall CC_Put_endglobals_Hook(DWORD OutClass);
 void _fastcall CC_Main_Hook(DWORD OutClass);
 
 extern "C" int agent_api_capture_globals_container(DWORD container);
-extern "C" void agent_api_capture_global_name(DWORD index, const char* name, DWORD raw_type, const char* type_name);
+extern "C" void agent_api_capture_global_name(DWORD index, const char* name, DWORD raw_type, const char* type_name, DWORD context);
 
 void _fastcall GetGlobalVarName_Hook(DWORD This, DWORD EDX, DWORD index, char* dst, int len) {
     agent_api_capture_globals_container(This);
@@ -36,7 +36,7 @@ void _fastcall GetGlobalVarName_Hook(DWORD This, DWORD EDX, DWORD index, char* d
             raw_type = 0xFFFFFFFF;
             type_name[0] = '\0';
         }
-        agent_api_capture_global_name(index, dst, raw_type, type_name);
+        agent_api_capture_global_name(index, dst, raw_type, type_name, This);
     }
 }
 
@@ -49,6 +49,7 @@ void Hook_Init() {
     CC_PutVar_Other = (CC_PutVar_OtherProc)WE_ADDRESS(0x0065B5F0);
     ConvertTriggerName = (ConvertTriggerNameProc)WE_ADDRESS(0x005A4A80);
     GetGlobalVarName = (GetGlobalVarNameProc)WE_ADDRESS(0x005C6750);
+    GetGlobalVarValue = (GetGlobalVarValueProc)WE_ADDRESS(0x005C6840);
     GetGUICount = (GetGUICountProc)WE_ADDRESS(0x005DAE20);
     GetGUIString = (GetGUIStringProc)WE_ADDRESS(0x005DAEE0);
     GetGUIIcon = (GetGUIIconProc)WE_ADDRESS(0x005DAE70);
@@ -129,6 +130,7 @@ GetGUIIconProc GetGUIIcon;
 SetGUIIdProc SetGUIId;
 ConvertTriggerNameProc ConvertTriggerName;
 GetGlobalVarNameProc GetGlobalVarName;
+GetGlobalVarValueProc GetGlobalVarValue;
 ChangeGUITypeProc ChangeGUIType;
 CC_Put_globalsProc CC_Put_globals;
 CC_Put_endglobalsProc CC_Put_endglobals;
