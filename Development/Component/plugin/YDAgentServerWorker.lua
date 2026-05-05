@@ -1024,6 +1024,109 @@ local function apply_object_set_field(op, options)
     return true
 end
 
+local function snapshot_operation(op)
+    if op.op == "set_trigger_name" then
+        return {
+            target = "trigger",
+            field = "name",
+            trigger_index = op.trigger_index,
+            before = agent.trigger_name(op.trigger_index),
+            after = op.name,
+        }
+    elseif op.op == "set_trigger_disabled" then
+        return {
+            target = "trigger",
+            field = "disabled",
+            trigger_index = op.trigger_index,
+            before = agent.trigger_disabled(op.trigger_index),
+            after = op.disabled,
+        }
+    elseif op.op == "set_eca_func_name" then
+        return {
+            target = "eca",
+            field = "func",
+            trigger_index = op.trigger_index,
+            eca_type = op.eca_type,
+            eca_index = op.eca_index,
+            before = agent.eca_func_name(op.trigger_index, op.eca_type, op.eca_index),
+            after = op.func,
+        }
+    elseif op.op == "set_eca_active" then
+        return {
+            target = "eca",
+            field = "active",
+            trigger_index = op.trigger_index,
+            eca_type = op.eca_type,
+            eca_index = op.eca_index,
+            after = op.active,
+        }
+    elseif op.op == "set_eca_param_value" then
+        return {
+            target = "eca_param",
+            field = "value",
+            trigger_index = op.trigger_index,
+            eca_type = op.eca_type,
+            eca_index = op.eca_index,
+            param_index = op.param_index,
+            before = agent.eca_param_value(op.trigger_index, op.eca_type, op.eca_index, op.param_index),
+            after = op.value,
+        }
+    elseif op.op == "add_eca" then
+        return {
+            target = "eca",
+            field = "count",
+            trigger_index = op.trigger_index,
+            eca_type = op.eca_type,
+            before = agent.eca_count(op.trigger_index, op.eca_type),
+            after = (agent.eca_count(op.trigger_index, op.eca_type) or 0) + 1,
+        }
+    elseif op.op == "remove_eca" then
+        local count = agent.eca_count(op.trigger_index, op.eca_type) or 0
+        return {
+            target = "eca",
+            field = "count",
+            trigger_index = op.trigger_index,
+            eca_type = op.eca_type,
+            eca_index = op.eca_index,
+            before = count,
+            after = count > 0 and count - 1 or 0,
+        }
+    elseif op.op == "object_set_field" then
+        return {
+            target = "object",
+            field = op.field_id,
+            type_name = op.type_name,
+            record_kind = op.record_kind,
+            object_id = op.object_id,
+            after = op.value,
+        }
+    end
+    return nil
+end
+
+local function verify_operation(op, before)
+    if op.op == "set_trigger_name" then
+        local after = agent.trigger_name(op.trigger_index)
+        return after == op.name, after
+    elseif op.op == "set_trigger_disabled" then
+        local after = agent.trigger_disabled(op.trigger_index)
+        return after == op.disabled, after
+    elseif op.op == "set_eca_func_name" then
+        local after = agent.eca_func_name(op.trigger_index, op.eca_type, op.eca_index)
+        return after == op.func, after
+    elseif op.op == "set_eca_param_value" then
+        local after = agent.eca_param_value(op.trigger_index, op.eca_type, op.eca_index, op.param_index)
+        return after == op.value, after
+    elseif op.op == "add_eca" then
+        local after = agent.eca_count(op.trigger_index, op.eca_type) or 0
+        return after == ((before and before.before or 0) + 1), after
+    elseif op.op == "remove_eca" then
+        local after = agent.eca_count(op.trigger_index, op.eca_type) or 0
+        return after == (before and before.after or after), after
+    end
+    return nil, nil
+end
+
 local function apply_operation(op, options)
     if op.op == "set_trigger_name" then
         return agent.set_trigger_name(op.trigger_index, op.name)
@@ -1069,6 +1172,14 @@ local function apply_plan(plan, options)
     if result.dry_run then
         result.ok = true
         result.pending = validation.operations
+        result.preview = {}
+        for index, op in ipairs(validation.operations) do
+            result.preview[#result.preview + 1] = {
+                index = index,
+                op = op.op,
+                snapshot = snapshot_operation(op),
+            }
+        end
         return result
     end
 
@@ -1083,11 +1194,19 @@ local function apply_plan(plan, options)
     end
 
     for index, op in ipairs(validation.operations) do
+        local snapshot = snapshot_operation(op)
         local ok, err = apply_operation(op, options)
+        local verified, after = nil, nil
+        if ok == true then
+            verified, after = verify_operation(op, snapshot)
+        end
         result.applied[#result.applied + 1] = {
             index = index,
             op = op.op,
             ok = ok == true,
+            snapshot = snapshot,
+            after = after,
+            verified = verified,
             error = ok == true and nil or (err or "operation returned false"),
         }
         if ok ~= true and options.continue_on_error ~= true then

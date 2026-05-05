@@ -33,6 +33,9 @@ The modernization baseline is in place:
 - File IPC fallback remains in `Development\Component\plugin\YDAgentServer.lua`.
 - `diag.status`, `diag.smoke`, and `agent.list_globals` loopback were verified
   with a test stub on 2026-05-02.
+- `ai.apply_plan` dry-run returns per-operation `preview` snapshots; non-dry-run
+  results include read-back `after` / `verified` fields where RPC can verify the
+  operation.
 - `Development\AI\ydagent_smoke.py` is now available for runtime smoke checks;
   `--restore` performs reversible trigger mutation. Global variable mutation is
   intentionally disabled until a real reversible storage path is identified.

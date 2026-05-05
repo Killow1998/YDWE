@@ -131,6 +131,7 @@ std::unique_ptr<hook_info> hi(static_cast<hook_info*>(*ph));
 - [x] JSON-RPC 服务端 — TCP worker 已修复，`diag.status` / `diag.smoke` loopback 通过
 - [x] 运行时 smoke 脚本 — `Development\AI\ydagent_smoke.py`，支持 TCP 轮询、诊断检查、`--restore` 触发器可逆改名
 - [x] Agent 自测 TUI/CLI — `Development\AI\ydagent_tui.py stub --restore` 可无 GUI 自启 Lua worker 测试桩并完整环回 JSON-RPC、AI dry-run、全局写入拒绝和触发器可逆改名
+- [x] AI apply 结果可验证 — `ai.apply_plan` dry-run 返回 operation preview/snapshot，非 dry-run 对可读回操作返回 `after` / `verified`
 - [x] 物体编辑器属性映射 — `YDAgentFieldMap.lua` SLK 解析完成
 - [x] AI 服务接口 — `YDAgentAI.lua` Claude/OpenAI/Ollama 配置层完成
 - [x] Stub 运行验证 — `YDAGENT_TEST_STUB` 下 TCP/JSON-RPC、`diag.status`、`diag.smoke`、`agent.list_globals` 通过

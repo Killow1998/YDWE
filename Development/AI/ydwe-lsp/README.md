@@ -212,6 +212,11 @@ The default mode is dry-run. A non-dry-run apply requires all of:
 - `options.confirm = true`
 - a one-shot UI approval token granted from the `YDWE AI Agent` menu
 
+Dry-run results include a `preview` array with per-operation snapshots such as
+target, field, before, and after. Non-dry-run results include the same snapshot
+plus read-back `after` and `verified` fields for operations that can be checked
+through RPC.
+
 The editor menu adds:
 
 - `YDWE AI Agent -> Agent Status`

@@ -192,6 +192,7 @@ LSP 服务器 (`ydwe-lsp.exe`) 和客户端插件 (`lsp_client.dll`) 已实现�
 
 #### 功能完善
 - [x] 安全操作应用层 dry-run / confirm 流程
+- [x] `ai.apply_plan` dry-run preview 与应用后读回校验字段
 - [x] AI 操作计划生成入口 (自然语言 → 安全操作计划)
 - [x] AI 代码生成入口 (自然语言 → Jass/Lua 文本)
 - [x] 代码解释入口
@@ -276,8 +277,10 @@ LSP 服务器 (`ydwe-lsp.exe`) 和客户端插件 (`lsp_client.dll`) 已实现�
 - `Component\plugin\YDAgentServerWorker.lua`
   - 新增 RPC 方法 `ai.apply_plan(plan, options)`。
   - 默认 `dry_run=true`，只返回待执行操作。
+  - dry-run 返回 `preview`，包含每步操作的 target、field、before、after 快照。
   - 真正应用必须显式传入 `dry_run=false` 与 `confirm=true`。
   - 非 dry-run 应用还必须消费一次 UI 授权 token，否则返回 `UI approval is required before applying operations`。
+  - 可读回的操作在应用结果中返回 `snapshot`、`after` 和 `verified`。
   - 触发器操作映射到现有 `agent.set_*`、`agent.add_eca`、`agent.remove_eca`。
   - `object_set_field` 支持读取对象 JSON、修改字段、再写回对象文件；需要 `options.map_path`。
 - `Component\plugin\YDAgentUI.lua`

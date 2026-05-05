@@ -169,6 +169,13 @@ def run_rpc_suite(host: str, port: int, restore: bool, tui: Tui) -> None:
         tui,
     )
     require(isinstance(dry_run, dict), "dry-run result is not an object")
+    require(isinstance(dry_run.get("preview"), list) and len(dry_run["preview"]) == 1, "dry-run preview is missing")
+    preview = dry_run["preview"][0]
+    snapshot = preview.get("snapshot") if isinstance(preview, dict) else None
+    require(isinstance(snapshot, dict), "dry-run preview snapshot is missing")
+    require(snapshot.get("target") == "trigger", f"unexpected preview target: {snapshot!r}")
+    require(snapshot.get("field") == "disabled", f"unexpected preview field: {snapshot!r}")
+    require(snapshot.get("after") is False, f"unexpected preview after value: {snapshot!r}")
 
     if globals_:
         global_write = expect("agent.set_global_value rejects unsafe write", lambda: rpc_call(host, port, "agent.set_global_value", [0, "99"]), tui)
