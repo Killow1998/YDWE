@@ -305,6 +305,7 @@ LSP 服务器 (`ydwe-lsp.exe`) 和客户端插件 (`lsp_client.dll`) 已实现�
   - 新增 `generate_plan`，封装 `complete(..., { parse = true })` 并要求返回可校验计划。
 - `Component\plugin\YDAgentUI.lua`
   - 新增 `show_review_panel`，显示最新 queued review plan。
+  - Review Panel 结构化展示 summary、validation warnings/errors、cleaned operations 和 dry-run preview 快照，并保留 Raw JSON。
   - Review Panel 支持刷新和 `Approve Next Apply` 一次性授权。
 - `Component\script\ydwe\ydwe_on_menu.lua`
   - `YDWE AI Agent` 菜单新增 `Review Panel`。

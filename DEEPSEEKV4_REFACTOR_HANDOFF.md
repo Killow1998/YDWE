@@ -330,8 +330,11 @@ Goal: make AI plans inspectable and safer for map authors.
 
 Tasks:
 
-- Replace raw JSON display with operation rows.
+- Replace raw JSON display with operation rows. Done for queued plans; Raw JSON
+  remains available at the bottom for debugging.
 - Show warnings, errors, target trigger/global/object field, and dry-run result.
+  Done for validation warnings/errors, cleaned operations, and dry-run preview
+  snapshots.
 - Add copy, refresh, approve-next-apply, and reject controls.
 - Keep one-shot apply approval semantics.
 

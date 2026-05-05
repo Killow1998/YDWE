@@ -269,6 +269,24 @@ local function rpc_call(method, params)
     return response
 end
 
+local function rpc_result(method, params)
+    local response, err = rpc_call(method, params)
+    if not response then
+        return nil, err
+    end
+    local decoded, parse_err = json_decode(response)
+    if parse_err then
+        return nil, parse_err
+    end
+    if type(decoded) ~= "table" then
+        return nil, "invalid JSON-RPC response"
+    end
+    if decoded.error then
+        return nil, decoded.error.message or json_encode(decoded.error)
+    end
+    return decoded.result
+end
+
 local function agent_available()
     return type(_G.ydwe_agent) == "table"
 end
@@ -359,13 +377,110 @@ local function wrap_text(text)
     return table.concat(out, "\n")
 end
 
+local function value_text(value)
+    if value == nil then
+        return "null"
+    end
+    if type(value) == "table" then
+        return json_encode(value)
+    end
+    return tostring(value)
+end
+
+local function append_validation(lines, validation)
+    if type(validation) ~= "table" then
+        return
+    end
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = validation.ok and "Validation: OK" or "Validation: FAILED"
+    if type(validation.warnings) == "table" and #validation.warnings > 0 then
+        lines[#lines + 1] = "Warnings:"
+        for _, warning in ipairs(validation.warnings) do
+            lines[#lines + 1] = string.format("  - #%s %s", tostring(warning.index or "?"), tostring(warning.message or warning))
+        end
+    end
+    if type(validation.errors) == "table" and #validation.errors > 0 then
+        lines[#lines + 1] = "Errors:"
+        for _, err in ipairs(validation.errors) do
+            lines[#lines + 1] = string.format("  - #%s %s", tostring(err.index or "?"), tostring(err.message or err))
+        end
+    end
+end
+
+local function append_operations(lines, operations)
+    if type(operations) ~= "table" or #operations == 0 then
+        return
+    end
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "Operations:"
+    for i, op in ipairs(operations) do
+        local target = op.trigger_index ~= nil and ("trigger#" .. tostring(op.trigger_index)) or op.object_id or ""
+        lines[#lines + 1] = string.format("  %d. %s %s risk=%s", i, tostring(op.op), target, tostring(op.risk or "unknown"))
+        if op.name then
+            lines[#lines + 1] = "     name -> " .. tostring(op.name)
+        elseif op.disabled ~= nil then
+            lines[#lines + 1] = "     disabled -> " .. tostring(op.disabled)
+        elseif op.func then
+            lines[#lines + 1] = "     func -> " .. tostring(op.func)
+        elseif op.value ~= nil then
+            lines[#lines + 1] = "     value -> " .. value_text(op.value)
+        end
+    end
+end
+
+local function append_preview(lines, preview)
+    if type(preview) ~= "table" or #preview == 0 then
+        return
+    end
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "Dry-run preview:"
+    for _, item in ipairs(preview) do
+        local snap = type(item) == "table" and item.snapshot or nil
+        if type(snap) == "table" then
+            local label = string.format("  %s. %s %s.%s", tostring(item.index or "?"), tostring(item.op or ""), tostring(snap.target or "?"), tostring(snap.field or "?"))
+            lines[#lines + 1] = label
+            lines[#lines + 1] = string.format("     before: %s", value_text(snap.before))
+            lines[#lines + 1] = string.format("     after : %s", value_text(snap.after))
+        end
+    end
+end
+
+local function format_review_payload(raw)
+    local payload, err = json_decode(raw)
+    if type(payload) ~= "table" then
+        return wrap_text(raw)
+    end
+    local plan = payload.plan or payload
+    local lines = {}
+    lines[#lines + 1] = "YDWE AI Review"
+    lines[#lines + 1] = "Provider: " .. tostring(payload.provider or "manual")
+    if type(plan.summary) == "string" then
+        lines[#lines + 1] = "Summary: " .. plan.summary
+    elseif type(plan.explanation) == "string" then
+        lines[#lines + 1] = "Summary: " .. plan.explanation
+    end
+    append_validation(lines, payload.validation)
+    append_operations(lines, payload.validation and payload.validation.operations or plan.operations)
+    local dry_run, dry_err = rpc_result('ai.apply_plan', { plan, { dry_run = true } })
+    if dry_run then
+        append_preview(lines, dry_run.preview)
+    else
+        lines[#lines + 1] = ""
+        lines[#lines + 1] = "Dry-run preview unavailable: " .. tostring(dry_err or "")
+    end
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "Raw JSON:"
+    lines[#lines + 1] = raw
+    return wrap_text(table.concat(lines, "\n"))
+end
+
 local function latest_review_text()
     drain_review_queue()
     local latest = review_items[#review_items]
     if not latest then
         return "No queued AI review plan.\nUse ai.generate_plan(...), ai.generate_trigger_plan(...), or ai.queue_review(...) first."
     end
-    return wrap_text(latest)
+    return format_review_payload(latest)
 end
 
 local function line_count(text)

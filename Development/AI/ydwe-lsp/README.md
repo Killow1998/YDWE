@@ -225,10 +225,11 @@ The editor menu adds:
 - `YDWE AI Agent -> Review Panel`
 - `YDWE AI Agent -> Apply Workflow`
 
-The review panel displays the latest queued AI operation plan. Plans can be
-queued by `ai.generate_plan`, `ai.generate_trigger_plan`,
-`ai.generate_batch_plan`, or `ai.queue_review`. The panel can refresh the
-queue and grant the one-shot apply token.
+The review panel displays the latest queued AI operation plan with summary,
+validation warnings/errors, cleaned operation rows, and dry-run preview
+snapshots. Plans can be queued by `ai.generate_plan`,
+`ai.generate_trigger_plan`, `ai.generate_batch_plan`, or `ai.queue_review`.
+The panel can refresh the queue and grant the one-shot apply token.
 
 For multi-trigger work, `agent.compress_context(options)` limits the number of
 triggers and ECA nodes included in AI context. `agent.build_batch_prompt`
