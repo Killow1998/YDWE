@@ -79,7 +79,7 @@ rtk Build\bin\Debug\test\YDWE_Test.exe
 Expected result:
 
 - `All tests passed`
-- Current known count: 18 test cases, 169 assertions.
+- Current known count: 19 test cases, 184 assertions.
 
 If the count changes because tests were added, update:
 

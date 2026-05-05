@@ -11,9 +11,11 @@
 #include <windows.h>
 #include <vector>
 #include <BlizzardStorm.h>
+#include "Common.h"
 
 // Stub for AgentAPI's dependency on Common.cpp
 DWORD g_nWEBase = 0x00400000;
+GetGlobalVarNameProc GetGlobalVarName = nullptr;
 
 // C exports from AgentAPI
 extern "C" {

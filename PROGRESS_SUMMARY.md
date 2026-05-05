@@ -121,7 +121,7 @@ std::unique_ptr<hook_info> hi(static_cast<hook_info*>(*ph));
 ### 阶段三继续 (80%)
 - [ ] 规范化代码风格（Tab/空格统一）
 - [ ] 改进错误处理机制
-- [x] 单元测试框架 (Catch2, 18 用例, 169 断言)
+- [x] 单元测试框架 (Catch2, 19 用例, 184 断言)
 
 ### 阶段四：AI 辅助功能 (进行中 — 2026-05-01)
 - [x] Jass/Lua LSP 服务器 — 代码补全、诊断、跳转定义
@@ -135,6 +135,7 @@ std::unique_ptr<hook_info> hi(static_cast<hook_info*>(*ph));
 - [x] AI 服务接口 — `YDAgentAI.lua` Claude/OpenAI/Ollama 配置层完成
 - [x] Stub 运行验证 — `YDAGENT_TEST_STUB` 下 TCP/JSON-RPC、`diag.status`、`diag.smoke`、`agent.list_globals` 通过
 - [x] 无 GUI 自测验证 — `python Development\AI\ydagent_tui.py stub --restore` 通过 11 项检查，0 失败
+- [x] C++ AgentAPI mock host 验证 — `test_agent_globals.cpp` 覆盖全局变量容器 `This+0x08` / `This+0x0C + index*0x1C0 + 0x2E`、诊断字段和写入拒绝
 - [x] 真实 YDWE Agent 触发器读写验证 — 通过 YDWE 外壳启动编辑器后，`diag.status` / `diag.smoke` 通过；保存触发编译后可读取 5 个真实触发器，并已完成触发器 0 可逆改名和恢复
 - [x] 真实 YDWE Agent 全局变量名称/类型/声明初始值读取验证 — 保存触发编译后 `agent.list_globals` 返回 17 个真实全局变量，Lua Worker 从 `currentmapscript.j` 的 `globals` 声明合并 `type` / `type_name` / `array` / 标量声明初始值；运行期真实值读取和可逆改值仍待后续实现
 
@@ -152,20 +153,20 @@ std::unique_ptr<hook_info> hi(static_cast<hook_info*>(*ph));
 |------|------|
 | YDWE.sln (Debug\|Win32) | ✅ 0 错误, 84 警告 |
 | YDTrigger.dll (25 导出) | ✅ |
-| YDWE_Test.exe (Catch2) | ✅ 18 用例, 169 断言 |
+| YDWE_Test.exe (Catch2) | ✅ 19 用例, 184 断言 |
 | YDWE.exe (2.0.1.20260501) | ✅ zh-CN 界面 |
 
 ### 单元测试结果
 ```
-Randomness seeded to: 625623932
+Randomness seeded to: 3559619922
 ===============================================================================
-All tests passed (169 assertions in 18 test cases)
+All tests passed (184 assertions in 19 test cases)
 ```
 
 **测试覆盖**:
 - `horrible_cast` - float/int 转换、指针转换、constexpr 验证
 - `singleton` - 唯一性、状态保持、向后兼容别名
-- YDTrigger Agent/Object API - 触发器、ECA、物体编辑器、全局变量 RPC wrapper 基础行为
+- YDTrigger Agent/Object API - 触发器、ECA、物体编辑器、全局变量 RPC wrapper 和 C++ mock 容器布局基础行为
 
 **注意**: 暂时禁用 `TreatWarningAsError` 以允许第三方库警告通过。核心现代化代码编译无错误。
 

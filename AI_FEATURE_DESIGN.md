@@ -181,7 +181,7 @@ LSP 服务器 (`ydwe-lsp.exe`) 和客户端插件 (`lsp_client.dll`) 已实现�
 - [x] JSON-RPC 服务端 — TCP 127.0.0.1:27118，后台线程
 - [x] Python 测试客户端 — ydagent_client.py
 - [x] Python 运行时 smoke 脚本 — ydagent_smoke.py（支持 `--restore` 可逆验证）
-- [x] 单元测试 — Catch2，18 用例，169 断言
+- [x] 单元测试 — Catch2，19 用例，184 断言，包含 C++ AgentAPI 全局变量 mock 容器布局验证
 
 #### AI 服务接口
 - [x] 设计 AI 服务接口 (支持 OpenAI / Claude / 本地 LLM)
@@ -205,7 +205,7 @@ LSP 服务器 (`ydwe-lsp.exe`) 和客户端插件 (`lsp_client.dll`) 已实现�
 1. ✅ YDTrigger Agent API — 25 个 C 导出函数（ECA 读写 + 全局变量 + 物体编辑器二进制↔JSON）
 2. ✅ Lua 封装 (`YDAgentCore.lua`) + JSON-RPC 服务端 (`YDAgentServer.lua`)
 3. ✅ 物体编辑器 API — w3u/w3a/w3t/w3b/w3q 二进制解析与写入
-4. ✅ 单元测试 — Catch2, 18 用例, 169 断言
+4. ✅ 单元测试 — Catch2, 19 用例, 184 断言
 5. ✅ 物体编辑器属性映射（field_id 到中文名的 SLK 表查询）
 6. ✅ AI 模型接口配置层（Claude / OpenAI / 本地 LLM）
 7. ✅ AI 模型响应解析与安全操作校验

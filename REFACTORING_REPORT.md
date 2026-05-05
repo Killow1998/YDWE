@@ -177,7 +177,8 @@ public:
 
 - `Development\Plugin\WE\YDTrigger\YDTrigger.vcxproj` Debug Win32 构建通过。
 - `Development\Test\YDWE_Test.vcxproj` Debug Win32 构建通过。
-- `Build\bin\Debug\test\YDWE_Test.exe` 通过：18 个用例，169 条断言。
+- `Build\bin\Debug\test\YDWE_Test.exe` 通过：19 个用例，184 条断言。
+- 新增 C++ AgentAPI mock 覆盖全局变量容器布局、诊断字段和写入拒绝。
 - Agent TCP loopback 使用测试桩通过：`diag.status`、`diag.smoke`、`agent.list_globals`。
 - `Development\AI\ydagent_smoke.py --restore` 用于真实会话触发器可逆改名验证；全局变量写入保持拒绝，直到定位真实可逆存储路径。
 

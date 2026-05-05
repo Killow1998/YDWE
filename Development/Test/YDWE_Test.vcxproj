@@ -181,9 +181,11 @@
     <ClCompile Include="test_noncopyable.cpp" />
     <ClCompile Include="test_object_api.cpp" />
     <ClCompile Include="test_agent_util.cpp" />
+    <ClCompile Include="test_agent_globals.cpp" />
     <ClCompile Include="storm_stubs.cpp" />
     <ClCompile Include="..\Plugin\WE\YDTrigger\ObjectAPI.cpp" />
     <ClCompile Include="..\Plugin\WE\YDTrigger\AgentAPI.cpp" />
+    <ClCompile Include="..\Plugin\WE\YDTrigger\Core\CC_VarType.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="catch2\catch_amalgamated.hpp" />
