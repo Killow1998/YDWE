@@ -115,16 +115,20 @@ public:
 ### 阶段三继续：架构重构
 
 - [x] 重构内存管理，使用智能指针 (inline.cpp)
-- [ ] 为关键模块添加单元测试框架 (Catch2)
+- [x] 为关键模块添加单元测试框架 (Catch2)
 - [ ] 改进错误处理机制
 - [ ] 规范化代码风格
 
 ### 阶段四：AI 辅助功能
 
-- [ ] 设计 AI 服务接口
-- [ ] 实现 Jass/Lua 语言服务器协议 (LSP)
-- [ ] 集成代码补全功能
-- [ ] 实现 AI 代码生成模块
+- [x] 实现 Jass/Lua 语言服务器协议 (LSP)
+- [x] 集成代码补全、诊断、跳转定义、hover、文档符号
+- [x] 实现 YDTrigger Agent API（25 个 C 导出：ECA、全局变量、物体编辑器）
+- [x] 实现 JSON-RPC TCP worker（127.0.0.1:27118）和文件 IPC 兜底
+- [x] 实现 AI 服务接口配置层（Claude / OpenAI / local LLM）
+- [x] 实现 AI 操作计划解析、校验、dry-run / confirm 应用流程
+- [ ] 完整触发器 ↔ 自然语言转换器
+- [ ] Review Panel 产品化、快照/回滚和更强运行时诊断
 
 ### 阶段五：Bug 修复
 
@@ -169,7 +173,15 @@ public:
 3. **回归测试**: 验证插件加载正常
 4. **性能测试**: 对比重构前后性能
 
+### 当前验证记录（2026-05-02）
+
+- `Development\Plugin\WE\YDTrigger\YDTrigger.vcxproj` Debug Win32 构建通过。
+- `Development\Test\YDWE_Test.vcxproj` Debug Win32 构建通过。
+- `Build\bin\Debug\test\YDWE_Test.exe` 通过：18 个用例，169 条断言。
+- Agent TCP loopback 使用测试桩通过：`diag.status`、`diag.smoke`、`agent.list_globals`。
+- `Development\AI\ydagent_smoke.py --restore` 用于真实会话触发器可逆改名验证；全局变量写入保持拒绝，直到定位真实可逆存储路径。
+
 ---
 
 *报告生成时间: 2026-05-01 (重构进行中)*
-*最后更新: 2026-05-01 — 阶段二/三*
+*最后更新: 2026-05-02 — Agent RPC 与全局变量 API 修复后同步*

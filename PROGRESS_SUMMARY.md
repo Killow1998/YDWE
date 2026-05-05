@@ -129,12 +129,12 @@ std::unique_ptr<hook_info> hi(static_cast<hook_info*>(*ph));
 - [x] Lua 封装 — `YDAgentCore.lua`, `_G.ydwe_agent`
 - [x] 物体编辑器 API — 独立文件读写验证通过，编译时读取待修复
 - [x] JSON-RPC 服务端 — TCP worker 已修复，`diag.status` / `diag.smoke` loopback 通过
-- [x] 运行时 smoke 脚本 — `Development\AI\ydagent_smoke.py`，支持 TCP 轮询、诊断检查、`--restore` 可逆变更
+- [x] 运行时 smoke 脚本 — `Development\AI\ydagent_smoke.py`，支持 TCP 轮询、诊断检查、`--restore` 触发器可逆改名
 - [x] 物体编辑器属性映射 — `YDAgentFieldMap.lua` SLK 解析完成
 - [x] AI 服务接口 — `YDAgentAI.lua` Claude/OpenAI/Ollama 配置层完成
-- [x] Stub 运行验证 — `YDAGENT_TEST_STUB` 下 TCP/JSON-RPC、`diag.status`、`diag.smoke`、`agent.list_globals`、`ydagent_smoke.py --restore` 通过
+- [x] Stub 运行验证 — `YDAGENT_TEST_STUB` 下 TCP/JSON-RPC、`diag.status`、`diag.smoke`、`agent.list_globals` 通过
 - [x] 真实 YDWE Agent 触发器读写验证 — 通过 YDWE 外壳启动编辑器后，`diag.status` / `diag.smoke` 通过；保存触发编译后可读取 5 个真实触发器，并已完成触发器 0 可逆改名和恢复
-- [x] 真实 YDWE Agent 全局变量名称/类型读取验证 — 保存触发编译后 `agent.list_globals` 返回 17 个真实全局变量，Lua Worker 从 `currentmapscript.j` 的 `globals` 声明合并 `type` / `type_name`；值读取和可逆改值仍待后续实现
+- [x] 真实 YDWE Agent 全局变量名称/类型/声明初始值读取验证 — 保存触发编译后 `agent.list_globals` 返回 17 个真实全局变量，Lua Worker 从 `currentmapscript.j` 的 `globals` 声明合并 `type` / `type_name` / `array` / 标量声明初始值；运行期真实值读取和可逆改值仍待后续实现
 
 ### 阶段五：Bug 修复 (进行中)
 - [x] 物体编辑器解析器安全加固（mod_count 限制）
@@ -169,7 +169,7 @@ All tests passed (169 assertions in 18 test cases)
 
 ### Agent 真实 GUI 验证记录
 
-2026-05-03 已完成真实 YDWE 编辑器进程内触发器读取、触发器可逆修改和全局变量名称/类型/声明初始值读取验证。
+2026-05-05 已完成真实 YDWE 编辑器进程内触发器读取、触发器可逆修改和全局变量名称/类型/声明初始值读取验证。
 
 已验证清单：
 - 启动 `Development\Component\YDWE.exe` 并加载 `Development\Component\example(演示地图)\系统\中心计时器-单位环绕(全局变量版).w3x`
@@ -187,7 +187,7 @@ All tests passed (169 assertions in 18 test cases)
 
 未完成清单：
 - 全局变量当前已完成名称、类型和声明初始值读取；运行期真实存储值读取和 `agent.set_global_value` 可逆改值仍待定位
-- `agent.set_global_value` 对声明型真实全局变量当前返回 `false`，避免只改 Agent 缓存造成假成功
+- `agent.set_global_value` 对声明型真实全局变量当前返回 JSON `false`，底层 `ydt_set_global_value` 也拒绝写入，避免只改 Agent 缓存造成假成功
 - 本次演示地图保存编译会因地图内生成 JASS 错误中断，但不影响触发器缓存捕获和 RPC 读写验证
 
 ## ⚠️ 已知问题
@@ -216,5 +216,5 @@ All tests passed (169 assertions in 18 test cases)
 
 ---
 
-*最后更新: 2026-05-03 — Agent 真实 YDWE 触发器读写验证通过，全局变量验证待定位*
+*最后更新: 2026-05-05 — Agent 真实 YDWE 全局变量名称/类型/声明初始值验证通过，运行期真实值与写入待定位*
 *重构报告: `REFACTORING_REPORT.md`*

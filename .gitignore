@@ -15,6 +15,16 @@
 *.DS_Store
 *.sqlite
 *.vs/
+Build/
+Development/Build/
+Development/AI/ydwe-lsp/bin/
+Development/AI/ydwe-lsp/obj/
+Development/Component/bin/
+Development/Component/logs/
+Development/Component/plugin/*.dll
+Development/Component/plugin/warcraft3/
+Development/Component/backups/
+*.w3xTemp/
 OpenSource/Boost/
 Development/Component/script/common/gitlog.lua
 Development/Component/compiler/include/YDTrigger/Import.h

@@ -308,7 +308,7 @@ static bool is_valid_global_var_container(DWORD cand) {
         return false;
     }
     __try {
-        DWORD count = *(DWORD*)(cand + 0x128);
+        DWORD count = *(DWORD*)(cand + 0x008);
         g_global_last_count = count;
         if (count == 0) {
             g_global_last_fail = 2;
@@ -318,22 +318,13 @@ static bool is_valid_global_var_container(DWORD cand) {
             g_global_last_fail = 3;
             return false;
         }
-        DWORD* varray = *(DWORD**)(cand + 0x12C);
-        g_global_last_varray = (DWORD)varray;
+        DWORD varray = *(DWORD*)(cand + 0x00C);
+        g_global_last_varray = varray;
         if (!varray) {
             g_global_last_fail = 4;
             return false;
         }
-
-        DWORD sample_count = count < 8 ? count : 8;
-        for (DWORD i = 0; i < sample_count; i++) {
-            DWORD var = varray[i];
-            if (!var) {
-                g_global_last_fail = 5;
-                return false;
-            }
-            (void)*(DWORD*)(var + 0x48);
-        }
+        (void)*(DWORD*)(varray + 0x2E);
         return true;
     } __except(EXCEPTION_EXECUTE_HANDLER) {
         g_global_last_fail = 99;
@@ -344,14 +335,31 @@ static bool is_valid_global_var_container(DWORD cand) {
 static bool capture_global_var_container(DWORD container) {
     g_global_capture_attempts++;
     g_global_last_candidate = container;
-    if (!is_valid_global_var_container(container)) return false;
-    g_globals_container = container;
-    g_global_capture_successes++;
     __try {
-        g_global_last_count = *(DWORD*)(container + 0x128);
+        DWORD count = *(DWORD*)(container + 0x008);
+        DWORD varray = *(DWORD*)(container + 0x00C);
+        g_global_last_count = count;
+        g_global_last_varray = varray;
+        if (count == 0) {
+            g_global_last_fail = 2;
+            return false;
+        }
+        if (count > 5000) {
+            g_global_last_fail = 3;
+            return false;
+        }
+        if (!varray) {
+            g_global_last_fail = 4;
+            return false;
+        }
+        (void)*(DWORD*)(varray + 0x2E);
     } __except(EXCEPTION_EXECUTE_HANDLER) {
-        g_global_last_count = 0;
+        g_global_last_fail = 99;
+        return false;
     }
+    g_globals_container = container;
+    g_global_last_fail = 0;
+    g_global_capture_successes++;
     return true;
 }
 
@@ -362,7 +370,7 @@ static DWORD find_global_var_container() {
         for (DWORD addr = base + 0x00600000; addr < base + 0x00800000; addr += 4) {
             DWORD cand = *(DWORD*)addr;
             if (!is_valid_global_var_container(cand)) continue;
-            DWORD count = *(DWORD*)(cand + 0x128);
+            DWORD count = *(DWORD*)(cand + 0x008);
             if (count == 0) continue;
             if (!capture_global_var_container(cand)) continue;
             return cand;
@@ -478,6 +486,18 @@ static void add_captured_global(DWORD index, const char* name, DWORD raw_type, c
                 g_global_alt_entry_178 = *(DWORD*)(entry + 0x178);
             }
         }
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        g_global_alt_entry = 0;
+        g_global_alt_entry_008 = 0;
+        g_global_alt_entry_00c = 0;
+        g_global_alt_entry_020 = 0;
+        g_global_alt_entry_048 = 0;
+        g_global_alt_entry_04c = 0;
+        g_global_alt_entry_128 = 0;
+        g_global_alt_entry_12c = 0;
+        g_global_alt_entry_178 = 0;
+    }
+    __try {
         if (g_global_alt_varray) {
             DWORD stride_entry = g_global_alt_varray + index * 0x1C0;
             g_global_stride_entry = stride_entry;
@@ -491,15 +511,6 @@ static void add_captured_global(DWORD index, const char* name, DWORD raw_type, c
             BLZSStrCopy(g_global_stride_name, (const char*)(stride_entry + 0x02E), sizeof(g_global_stride_name));
         }
     } __except(EXCEPTION_EXECUTE_HANDLER) {
-        g_global_alt_entry = 0;
-        g_global_alt_entry_008 = 0;
-        g_global_alt_entry_00c = 0;
-        g_global_alt_entry_020 = 0;
-        g_global_alt_entry_048 = 0;
-        g_global_alt_entry_04c = 0;
-        g_global_alt_entry_128 = 0;
-        g_global_alt_entry_12c = 0;
-        g_global_alt_entry_178 = 0;
         g_global_alt_name_offset = 0xFFFFFFFF;
         g_global_stride_entry = 0;
         g_global_stride_name[0] = '\0';
@@ -541,23 +552,24 @@ static void refresh_globals() {
     }
     DWORD base = g_nWEBase;
     __try {
-        DWORD count = *(DWORD*)(g_globals_container + 0x128);
-        DWORD* varray = *(DWORD**)(g_globals_container + 0x12C);
+        DWORD count = *(DWORD*)(g_globals_container + 0x008);
+        DWORD varray = *(DWORD*)(g_globals_container + 0x00C);
         if (!varray || count > 5000) return;
         for (DWORD i = 0; i < count; i++) {
-            DWORD vp = varray[i];
-            if (!vp) continue;
             GlobalVar gv = {};
-            // Get name by calling GetGlobalVarName if available, else use index
-            // The name is sometimes stored at +0x20 or +0x4C of the container's children
-            const char* nm = (const char*)(vp + 0x20);
-            if (nm && *nm) BLZSStrCopy(gv.name, nm, 260);
+            if (GetGlobalVarName) GetGlobalVarName(g_globals_container, 0, i, gv.name, 260);
+            if (!gv.name[0]) {
+                const char* nm = (const char*)(varray + i * 0x1C0 + 0x2E);
+                if (nm && *nm) BLZSStrCopy(gv.name, nm, 260);
+            }
+            if (gv.name[0]) {
+                gv.type = 0xFFFFFFFF;
+            }
             else {
                 BLZSStrPrintf(gv.name, 260, "var_%03d", i);
+                gv.type = 0xFFFFFFFF;
             }
-            gv.type = *(DWORD*)(vp + 0x48);
-            const char* val = (const char*)(vp + 0x4C);
-            if (val) BLZSStrCopy(gv.value, val, 260);
+            gv.value[0] = '\0';
             g_globals.push_back(gv);
         }
     } __except(EXCEPTION_EXECUTE_HANDLER) {}
@@ -1202,16 +1214,6 @@ int __cdecl ydt_get_global_type(int index) {
 const char* __cdecl ydt_get_global_value(int index) {
     using namespace agent_api;
     if (index < 0 || index >= (int)g_globals.size()) return nullptr;
-    if (GetGlobalVarValue && g_global_last_this) {
-        char value[260] = {};
-        __try {
-            GetGlobalVarValue(g_global_last_this, 0, (DWORD)index, value, sizeof(value));
-            if (value[0]) {
-                return alloc_str(value);
-            }
-        } __except(EXCEPTION_EXECUTE_HANDLER) {
-        }
-    }
     return alloc_str(g_globals[index].value);
 }
 

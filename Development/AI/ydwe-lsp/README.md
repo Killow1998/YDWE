@@ -172,6 +172,27 @@ Trigger AI context methods:
 - `agent.analyze_relationships(options)`
 - `agent.build_relationship_prompt(instruction, options)`
 
+Trigger/global data methods:
+
+- `agent.create_trigger(name)`
+- `agent.delete_trigger(index)`
+- `agent.global_count()`
+- `agent.global_name(index)`
+- `agent.global_type(index)`
+- `agent.global_value(index)`
+- `agent.set_global_value(index, value)`
+- `agent.list_globals()`
+
+Diagnostic methods:
+
+- `diag.status()`
+- `diag.smoke()`
+
+Runtime smoke script:
+
+- `python Development\AI\ydagent_smoke.py`
+- `python Development\AI\ydagent_smoke.py --restore`
+
 Supported providers are `claude`, `openai`, `local`, and `local_llm`.
 Cloud provider keys are read from `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`
 unless explicitly configured by the caller.
@@ -229,9 +250,12 @@ Current implementation status:
 Remaining work should focus on:
 
 1. Runtime smoke tests and diagnostics
-   - Verify menu loading, JSON-RPC server health, UI RPC client, Review Panel,
-     Generate Panel, one-shot apply token, and `ai.apply_plan`.
-   - Avoid the Debug `lua.exe` syntax-check flow that previously hung.
+    - Verify menu loading, JSON-RPC server health, UI RPC client, Review Panel,
+      Generate Panel, one-shot apply token, and `ai.apply_plan`.
+    - Use `Development\AI\ydagent_smoke.py --restore` for reversible trigger
+      mutation checks in a live WorldEdit session. Global variable mutation must
+      stay disabled until a real reversible storage path is identified.
+    - Avoid the Debug `lua.exe` syntax-check flow that previously hung.
 
 2. Full trigger-to-natural-language and natural-language-to-trigger conversion
    - Add Chinese explanation templates, localized ECA names, parameter meaning,

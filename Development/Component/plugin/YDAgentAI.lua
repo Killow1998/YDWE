@@ -27,7 +27,7 @@ local PROVIDERS = {
         endpoint = "http://127.0.0.1:11434/api/chat",
         api_key_env = "",
     },
-    local = {
+    ["local"] = {
         endpoint = "http://127.0.0.1:11434/api/chat",
         api_key_env = "",
     },

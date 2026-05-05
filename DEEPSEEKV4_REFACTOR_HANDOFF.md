@@ -1,6 +1,6 @@
 # YDWE Refactor DeepSeek V4 Handoff
 
-Last updated: 2026-05-02
+Last updated: 2026-05-05
 
 This document is the execution guide for a DeepSeek V4 based agent to continue
 `ydwe-refactor`. It is intentionally operational: follow the task order, run the
@@ -34,7 +34,8 @@ The modernization baseline is in place:
 - `diag.status`, `diag.smoke`, and `agent.list_globals` loopback were verified
   with a test stub on 2026-05-02.
 - `Development\AI\ydagent_smoke.py` is now available for runtime smoke checks;
-  `--restore` performs reversible trigger/global mutation.
+  `--restore` performs reversible trigger mutation. Global variable mutation is
+  intentionally disabled until a real reversible storage path is identified.
 
 Known source files for the Agent path:
 
@@ -176,7 +177,7 @@ Expected result:
 - TCP connects.
 - `diag.status` and `diag.smoke` pass.
 - Trigger data may remain empty until a save/compile path runs; after compilation reaches `CC_PutTrigger_Hook`, `agent.list_triggers` should return real triggers.
-- `agent.list_globals` should return real global variable names and declaration-derived types after a save/compile path runs; value read and mutation remain follow-up work.
+- `agent.list_globals` should return real global variable names, declaration-derived types, array flags, and scalar declaration initial values after a save/compile path runs. Runtime storage value read and mutation remain follow-up work.
 
 2026-05-03 result:
 
@@ -210,9 +211,10 @@ Then restore the original name immediately.
 
 ### Global Variable Mutation Check
 
-Only run this when `agent.list_globals` returns at least one global variable with
-a safe string-like value. As of 2026-05-03, real GUI validation covers global
-variable name/type enumeration only; value read and mutation are not yet verified.
+Do not run this as a pass/fail mutation gate yet. As of 2026-05-05, real GUI
+validation covers global variable name/type/array flags and declaration initial
+values only. Runtime storage value read and mutation are not yet verified, and
+declared globals should return `false` for mutation attempts.
 
 ```powershell
 rtk python Development\AI\ydagent_client.py rpc agent.list_globals
@@ -220,20 +222,17 @@ rtk python Development\AI\ydagent_client.py rpc agent.set_global_value 0 "\"AI_G
 rtk python Development\AI\ydagent_client.py rpc agent.global_value 0
 ```
 
-Pass condition:
+Current safe pass condition:
 
-- `agent.set_global_value` returns `True`.
-- `agent.global_value 0` returns the new value.
-
-Then restore the original value immediately. If the target global type is not a
-string-compatible field, pick another global or add a type-aware test first.
+- `agent.set_global_value` returns `false` for declared real globals.
+- `agent.global_value` continues to return the declaration initial value.
 
 ## Next Work Items
 
 ### P0: Real WorldEdit Runtime Verification
 
-Goal: prove the Agent can mutate real GUI trigger and global variable state in
-WorldEdit, not only through a stub.
+Goal: prove the Agent can read real GUI trigger/global state and safely mutate
+supported trigger state in WorldEdit, not only through a stub.
 
 Tasks:
 
@@ -242,13 +241,17 @@ Tasks:
 - Run `diag.status`, `diag.smoke`, `agent.refresh`, `agent.list_triggers`,
   `agent.list_globals`.
 - Perform reversible trigger rename.
-- Perform reversible global variable value change.
+- Verify global variables expose names, types, array flags, scalar declaration
+  initial values, and return `false` for unsafe mutation attempts.
 - Capture logs from `Development\Component\logs\ydwe.log`.
 
 Acceptance:
 
 - Trigger rename is visible through RPC after mutation. Passed on 2026-05-03.
-- Global value mutation is visible through RPC after mutation. Pending because real GUI validation currently covers global variable name/type enumeration only.
+- Global variable name/type/array/declaration initial value read is visible
+  through RPC. Passed on 2026-05-05.
+- Global value mutation remains pending until a real reversible storage path is
+  identified.
 - No crash in `YDWE.exe`.
 - Logs contain no Agent worker startup error.
 
@@ -256,22 +259,23 @@ Acceptance:
 
 Goal: avoid human GUI steps.
 
-Status (2026-05-02): core script delivered at
-`Development\AI\ydagent_smoke.py`; real WorldEdit session run remains required.
+Status (2026-05-05): core script delivered at
+`Development\AI\ydagent_smoke.py`; `--restore` verifies trigger rename and
+restore only. Real WorldEdit session run remains required.
 
 Tasks:
 
 - Add `Development\AI\ydagent_smoke.py`.
-- It should poll TCP availability, run diagnostics, snapshot first trigger/global,
-  mutate, verify, and restore.
+- It should poll TCP availability, run diagnostics, snapshot a trigger, mutate,
+  verify, and restore the trigger name.
 - It should exit non-zero on failure and print a concise report.
-- It must refuse destructive operations when no trigger/global exists.
+- It must refuse destructive operations when no trigger exists.
 
 Acceptance:
 
 - `rtk python Development\AI\ydagent_smoke.py --restore` can validate a live
   WorldEdit session without manual clicks.
-- The script leaves trigger/global state restored.
+- The script leaves trigger state restored.
 
 ### P2: Harden Global Variable API
 

@@ -16,19 +16,23 @@ loader.load = function(path)
         int  ydt_set_eca_func_name(int,int,int,const char*); int  ydt_set_eca_active(int,int,int,int);
         int  ydt_set_eca_param_value(int,int,int,int,const char*);
         int  ydt_add_eca(int,int); int  ydt_remove_eca(int,int,int);
+        int  ydt_create_trigger(const char*); int ydt_delete_trigger(int);
+        int  ydt_get_global_count(void); const char* ydt_get_global_name(int);
+        int  ydt_get_global_type(int); const char* ydt_get_global_value(int);
+        int  ydt_set_global_value(int,const char*);
         const char* ydt_read_object_file(const char*); int  ydt_write_object_file(const char*,const char*);
     ]])
     local ok, dll = pcall(ffi.load, path:string())
     if not ok then log.error('YDAgentCore: DLL load failed: '..tostring(dll)); return false end
     YDT = dll
-    log.info('YDAgentCore: YDTrigger.dll loaded (18 exports)')
+    log.info('YDAgentCore: YDTrigger.dll loaded')
     return true
 end
 
 loader.unload = function() YDT = nil end
 
 local agent = {}; agent.EVENT=0; agent.CONDITION=1; agent.ACTION=2
-local function ts(p) if p==nil then return nil end; local s=ffi.string(p); return s=="" and nil or s end
+local function ts(p) if p==nil then return nil end; if type(p)=="string" then return p~="" and p or nil end; local s=ffi.string(p); return s=="" and nil or s end
 function agent.refresh()             local n=YDT.ydt_refresh(); return n>0 and n or nil end
 function agent.trigger_count()        return YDT and tonumber(YDT.ydt_get_trigger_count())or 0 end
 function agent.trigger_name(i)        return YDT and ts(YDT.ydt_get_trigger_name(i)) end
@@ -45,6 +49,17 @@ function agent.set_eca_active(i,t,ei,a)   return YDT and YDT.ydt_set_eca_active(
 function agent.set_eca_param_value(i,t,ei,p,v) return YDT and YDT.ydt_set_eca_param_value(i,t,ei,p,v)~=0 or false end
 function agent.add_eca(i,t)               return YDT and YDT.ydt_add_eca(i,t)~=0 or false end
 function agent.remove_eca(i,t,ei)         return YDT and YDT.ydt_remove_eca(i,t,ei)~=0 or false end
+function agent.create_trigger(n)          return YDT and YDT.ydt_create_trigger(n) or 0 end
+function agent.delete_trigger(i)          return YDT and YDT.ydt_delete_trigger(i)~=0 or false end
+function agent.global_count()             return YDT and tonumber(YDT.ydt_get_global_count()) or 0 end
+function agent.global_name(i)             return YDT and ts(YDT.ydt_get_global_name(i)) end
+function agent.global_type(i)             local r=YDT and tonumber(YDT.ydt_get_global_type(i)) or -1; return r>=0 and r or nil end
+function agent.global_value(i)            return YDT and ts(YDT.ydt_get_global_value(i)) end
+function agent.set_global_value(i,v)      return YDT and YDT.ydt_set_global_value(i,v)~=0 or false end
+function agent.list_globals() local n=agent.global_count(); local l={}
+    for i=0,n-1 do l[#l+1]={index=i,name=agent.global_name(i),type=agent.global_type(i),value=agent.global_value(i)} end
+    return l
+end
 local function rel(i,t) local n=agent.eca_count(i,t); if n==0 then return{}end; local l={}
     for j=0,n-1 do local fn=agent.eca_func_name(i,t,j)
         if fn then local nd={func=fn,gui_id=agent.eca_gui_id(i,t,j),params={}}

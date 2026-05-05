@@ -49,7 +49,6 @@ void Hook_Init() {
     CC_PutVar_Other = (CC_PutVar_OtherProc)WE_ADDRESS(0x0065B5F0);
     ConvertTriggerName = (ConvertTriggerNameProc)WE_ADDRESS(0x005A4A80);
     GetGlobalVarName = (GetGlobalVarNameProc)WE_ADDRESS(0x005C6750);
-    GetGlobalVarValue = (GetGlobalVarValueProc)WE_ADDRESS(0x005C6840);
     GetGUICount = (GetGUICountProc)WE_ADDRESS(0x005DAE20);
     GetGUIString = (GetGUIStringProc)WE_ADDRESS(0x005DAEE0);
     GetGUIIcon = (GetGUIIconProc)WE_ADDRESS(0x005DAE70);
@@ -130,7 +129,6 @@ GetGUIIconProc GetGUIIcon;
 SetGUIIdProc SetGUIId;
 ConvertTriggerNameProc ConvertTriggerName;
 GetGlobalVarNameProc GetGlobalVarName;
-GetGlobalVarValueProc GetGlobalVarValue;
 ChangeGUITypeProc ChangeGUIType;
 CC_Put_globalsProc CC_Put_globals;
 CC_Put_endglobalsProc CC_Put_endglobals;
