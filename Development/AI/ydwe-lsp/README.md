@@ -190,6 +190,8 @@ Diagnostic methods:
 
 Runtime smoke script:
 
+- `python Development\AI\ydagent_tui.py stub --restore`
+- `python Development\AI\ydagent_tui.py live --start --restore --map <map.w3x>`
 - `python Development\AI\ydagent_smoke.py`
 - `python Development\AI\ydagent_smoke.py --restore`
 
@@ -252,6 +254,9 @@ Remaining work should focus on:
 1. Runtime smoke tests and diagnostics
     - Verify menu loading, JSON-RPC server health, UI RPC client, Review Panel,
       Generate Panel, one-shot apply token, and `ai.apply_plan`.
+    - Use `Development\AI\ydagent_tui.py stub --restore` as the default no-GUI
+      loopback gate for JSON-RPC, Lua worker dispatch, AI operation schema,
+      dry-run apply, global write rejection, and reversible trigger mutation.
     - Use `Development\AI\ydagent_smoke.py --restore` for reversible trigger
       mutation checks in a live WorldEdit session. Global variable mutation must
       stay disabled until a real reversible storage path is identified.

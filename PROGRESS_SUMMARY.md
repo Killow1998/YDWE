@@ -130,9 +130,11 @@ std::unique_ptr<hook_info> hi(static_cast<hook_info*>(*ph));
 - [x] 物体编辑器 API — 独立文件读写验证通过，编译时读取待修复
 - [x] JSON-RPC 服务端 — TCP worker 已修复，`diag.status` / `diag.smoke` loopback 通过
 - [x] 运行时 smoke 脚本 — `Development\AI\ydagent_smoke.py`，支持 TCP 轮询、诊断检查、`--restore` 触发器可逆改名
+- [x] Agent 自测 TUI/CLI — `Development\AI\ydagent_tui.py stub --restore` 可无 GUI 自启 Lua worker 测试桩并完整环回 JSON-RPC、AI dry-run、全局写入拒绝和触发器可逆改名
 - [x] 物体编辑器属性映射 — `YDAgentFieldMap.lua` SLK 解析完成
 - [x] AI 服务接口 — `YDAgentAI.lua` Claude/OpenAI/Ollama 配置层完成
 - [x] Stub 运行验证 — `YDAGENT_TEST_STUB` 下 TCP/JSON-RPC、`diag.status`、`diag.smoke`、`agent.list_globals` 通过
+- [x] 无 GUI 自测验证 — `python Development\AI\ydagent_tui.py stub --restore` 通过 11 项检查，0 失败
 - [x] 真实 YDWE Agent 触发器读写验证 — 通过 YDWE 外壳启动编辑器后，`diag.status` / `diag.smoke` 通过；保存触发编译后可读取 5 个真实触发器，并已完成触发器 0 可逆改名和恢复
 - [x] 真实 YDWE Agent 全局变量名称/类型/声明初始值读取验证 — 保存触发编译后 `agent.list_globals` 返回 17 个真实全局变量，Lua Worker 从 `currentmapscript.j` 的 `globals` 声明合并 `type` / `type_name` / `array` / 标量声明初始值；运行期真实值读取和可逆改值仍待后续实现
 

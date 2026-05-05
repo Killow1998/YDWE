@@ -36,6 +36,10 @@ The modernization baseline is in place:
 - `Development\AI\ydagent_smoke.py` is now available for runtime smoke checks;
   `--restore` performs reversible trigger mutation. Global variable mutation is
   intentionally disabled until a real reversible storage path is identified.
+- `Development\AI\ydagent_tui.py` is the preferred no-GUI self-test harness.
+  `stub --restore` starts `YDAgentServerWorker.lua` with `YDAGENT_TEST_STUB`,
+  runs JSON-RPC/AI dry-run/global-write-rejection checks, verifies reversible
+  trigger rename, and exits without user interaction.
 
 Known source files for the Agent path:
 
@@ -99,6 +103,22 @@ The real `YDTrigger.dll` installs WorldEdit hooks in `DllMain`, so do not load i
 inside plain `lua.exe` for loopback tests. Use the test-stub entry in
 `YDAgentServerWorker.lua` to validate TCP, JSON-RPC, dispatch, diagnostics, and
 global variable RPC without opening WorldEdit.
+
+Preferred one-command TUI/CLI gate:
+
+```powershell
+rtk python Development\AI\ydagent_tui.py stub --restore
+```
+
+Expected result:
+
+- `diag.status`, `diag.smoke`, `agent.list_triggers`, `agent.list_globals`,
+  `agent.compress_context`, `ai.operation_schema`, and `ai.apply_plan` dry-run
+  pass.
+- `agent.set_global_value` returns `false`, preserving the current safe boundary.
+- Trigger rename/restore passes against the in-process Lua test stub.
+
+Use the manual stub worker commands below only when debugging the worker itself.
 
 ### Start Stub Worker
 
@@ -261,11 +281,14 @@ Goal: avoid human GUI steps.
 
 Status (2026-05-05): core script delivered at
 `Development\AI\ydagent_smoke.py`; `--restore` verifies trigger rename and
-restore only. Real WorldEdit session run remains required.
+restore only. `Development\AI\ydagent_tui.py stub --restore` now provides the
+default no-GUI loopback gate. Real WorldEdit session run remains required only
+for C++ hook and real memory layout validation.
 
 Tasks:
 
 - Add `Development\AI\ydagent_smoke.py`.
+- Add `Development\AI\ydagent_tui.py`.
 - It should poll TCP availability, run diagnostics, snapshot a trigger, mutate,
   verify, and restore the trigger name.
 - It should exit non-zero on failure and print a concise report.
@@ -275,6 +298,8 @@ Acceptance:
 
 - `rtk python Development\AI\ydagent_smoke.py --restore` can validate a live
   WorldEdit session without manual clicks.
+- `rtk python Development\AI\ydagent_tui.py stub --restore` validates the Agent
+  RPC loop without opening WorldEdit.
 - The script leaves trigger state restored.
 
 ### P2: Harden Global Variable API
