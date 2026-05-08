@@ -2,88 +2,212 @@
 
 Last updated: 2026-05-09
 
-## Current Repository State
+This is the single source of truth for the current `ydwe-refactor` state.
+Do not create new status, summary, handoff, or report markdown files elsewhere
+in the repo. Update this file instead.
+
+## Current State
+
+### Repository
 
 - active branch: `master`
 - tracked push target: `killow/master`
 - upstream source remote also exists as `origin`
 
-The repo has already landed and pushed the current Agent/runtime/doc/tooling
-changes. Generated scratch output should be kept out of future commits.
+### Build Baseline
 
-## Delivered Changes
+- Visual Studio 2022
+- Win32 + `v143`
+- C++20
+- `Build/lua/make.lua` already targets the current toolset
 
-### Build and Toolchain
+### Runtime Baseline
 
-- VS2022 / `v143` build path is wired into the Lua build driver
-- core debug builds for `YDTrigger` and test targets are working
+Use:
+
+```powershell
+Q:\AppData\ydwe\YDWE\Build\publish\Debug\YDWE.exe
+```
+
+Do not directly start `worldedit.exe` for Agent/runtime validation. The correct
+path is `YDWE.exe -> worldeditydwe.exe`.
+
+## Delivered Capabilities
+
+### Core Refactor
+
+- repo builds on the current VS2022 toolchain
+- `YDTrigger` debug build is healthy
+- test targets are buildable
 
 ### Agent Runtime
 
-- `editor.save_map` is implemented in `YDAgentServerWorker.lua`
+- JSON-RPC worker is integrated in the editor runtime
+- `editor.save_map` is implemented
 - `ydagent_client.py save_map` is available
-- script global parsing now reads both `globals` and `InitGlobals`
-- provider config UI exists in the editor
-- AI apply flow has snapshot/rollback support
+- global parsing reads both `globals` and `InitGlobals`
+- provider configuration UI exists in the editor
+- AI apply flow supports snapshot/rollback
 
-### Verified Map Editing
+### Real Map Editing
 
-- real trigger listing works
-- real trigger rename works and is reversible
-- real global listing works
-- map-level global create / modify / delete works
-- object-editor mutation works
-- GUI-trigger-only item-combine demo was successfully produced and tested
+Verified working:
 
-## Verified Runtime Results
+- list real triggers
+- rename real triggers
+- list real globals
+- create / modify / delete globals at map-file level
+- read / write object-editor fields
+- save / compile from CLI through the live editor session
 
-### Example Map Session
+### GUI-First Proof
 
-For `Development\Component\example(演示地图)\AI\AI——RPG佣兵AI.w3x`:
+The refactor already proved that the Agent path edits real GUI map content:
 
-- before save: trigger/global counts can be `0`
-- after `save_map`: counts become non-zero
-- real trigger names were read successfully
-- real global names/types/values were read successfully
+- GUI-only item-combine formulas were created
+- GUI-only item grant was created
+- GUI-only compose counter increment was created
+- no custom helper script is required for the final GUI-only demo behavior
 
-This example map does not need to be kept as a repo change. It is only a
-verification target.
-
-### GUI-Only Compose Demo
-
-Primary demo artifact:
+Reference demo artifact:
 
 - `Q:\AppData\ydwe\work\compose_demo_gui_only_v2.w3x`
 
-Verified behavior:
-
-- formulas are defined in GUI triggers
-- item grant is defined in GUI triggers
-- compose counter uses a GUI variable increment
-- no custom helper script is required for the final GUI-only demo behavior
-
-Related tool:
+Generation helper:
 
 - `Development/AI/ydmap_compose_demo.py`
 
-## Remaining Gaps
+## Operation Manual
 
-### Not Yet Solved
+### 1. Build
 
-- runtime direct global-value memory write is still disabled
-- a safe native write path for `ydt_set_global_value` still needs design
+```powershell
+MSBuild YDWE.sln /t:Build /p:Configuration=Debug /p:Platform=Win32
+```
 
-### Operational Risks
+### 2. Launch
 
-- save/compile automation is stable now, but editor automation remains
-  environment-sensitive
-- generated logs and scratch files can easily pollute the worktree if not
-  cleaned after testing
+```powershell
+Q:\AppData\ydwe\YDWE\Build\publish\Debug\YDWE.exe
+```
 
-## Recommended Next Work
+### 3. Basic CLI Checks
 
-1. keep new documentation only under `docs/`
-2. keep demo/test artifacts outside the source tree unless they are intentional
-3. design a safe native global-write path before re-enabling runtime writes
-4. continue testing with GUI-trigger-first scenarios, because that is the
-   clearest proof that the Agent path edits real map content
+Status:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py status
+```
+
+List triggers:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py rpc agent.list_triggers
+```
+
+List globals:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py rpc agent.list_globals
+```
+
+### 4. Populate Live Session Data
+
+Cold sessions may start with empty trigger/global caches. Use:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py save_map
+```
+
+This is the standard way to trigger a real editor save/compile cycle from CLI.
+
+### 5. Safe Validation Sequence
+
+1. start exactly one `YDWE.exe` session
+2. load a map
+3. run `save_map`
+4. query triggers/globals
+5. make one reversible trigger change
+6. save again if needed
+7. close test processes and clean generated residue
+
+### 6. No-GUI Loopback
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_tui.py stub --restore
+```
+
+Use this before GUI validation when changing RPC/runtime behavior.
+
+## Verified Results
+
+### Live Session
+
+Verified in real YDWE sessions:
+
+- trigger enumeration works
+- trigger rename is reversible
+- global names/types/values are readable
+- save/compile can be triggered from CLI
+- object-editor and trigger-editor changes can be materialized into real maps
+
+### Example Validation Target
+
+The example AI map under `Development\Component\example(...)\AI\` was used as a
+verification target only. It should not be treated as an intended repo content
+change.
+
+### GUI-Only Compose Demo
+
+Verified behavior of the final GUI-only compose demo:
+
+- formulas live in GUI triggers
+- test items are granted in GUI triggers
+- compose count is tracked in a GUI global
+- user-side manual test already succeeded
+
+## Known Limits
+
+### Native Global Write
+
+- `ydt_set_global_value` is still a safe no-op in native code
+- direct runtime memory writes for globals are not re-enabled
+- current safe path is:
+  - edit map-backed data
+  - trigger save/compile
+  - read back through RPC
+
+### Arrays
+
+- array-global writes are not supported
+
+### Automation Constraints
+
+- editor automation is environment-sensitive
+- tests must start from `YDWE.exe`
+- generated logs and scratch files must be cleaned after testing
+
+## Next-Phase Goals
+
+### P0
+
+- design a safe native write path for `ydt_set_global_value`
+- keep failure behavior fail-closed until that path is proven safe
+
+### P1
+
+- continue hardening scripted live-session verification
+- keep GUI-trigger-first test cases as the primary proof path
+
+### P2
+
+- extend real edit coverage with more object/trigger/global scenarios
+- keep `docs/refactor-status.md` as the only status document
+
+## Documentation Rule
+
+When the refactor state changes:
+
+- update this file
+- update `README.md` only if the user-facing capability summary changed
+- do not add new report-style markdown files
