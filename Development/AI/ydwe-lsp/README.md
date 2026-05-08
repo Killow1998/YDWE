@@ -6,8 +6,11 @@ YDWE Language Server Protocol implementation for Jass/Lua editing support.
 
 ### Launch YDWE Editor
 ```
-Q:\AppData\ydwe\YDWE\Development\Component\bin\worldedit.exe
+Q:\AppData\ydwe\YDWE\Build\publish\Debug\YDWE.exe
 ```
+
+For Agent/runtime verification, do not directly launch `worldedit.exe`.
+Launch `YDWE.exe` and let it spawn the editor process itself.
 
 The editor will automatically:
 1. Load Lua engine (`LuaEngine.dll`)
@@ -28,13 +31,14 @@ Key outputs:
 ## Architecture
 
 ```
-worldedit.exe (YDWE Editor)
-├── LuaEngine.dll           Script engine
-├── script/ydwe/main.lua    Main script entry
-│   └── ydwe_on_startup.lua Plugin loader
-│       ├── YDTrigger.plcfg → YDTrigger.dll (GUI trigger hooks)
-│       └── YDLspClient.plcfg → lsp_client.dll → ydwe-lsp.exe
-└── wehelper.dll            WE helper
+YDWE.exe (YDWE launcher)
+└── worldeditydwe.exe (Editor process spawned by YDWE)
+    ├── LuaEngine.dll           Script engine
+    ├── script/ydwe/main.lua    Main script entry
+    │   └── ydwe_on_startup.lua Plugin loader
+    │       ├── YDTrigger.plcfg → YDTrigger.dll (GUI trigger hooks)
+    │       └── YDLspClient.plcfg → lsp_client.dll → ydwe-lsp.exe
+    └── wehelper.dll            WE helper
 
 ydwe-lsp.exe (LSP Server, stdin/stdout JSON-RPC)
 ├── server.cpp              Message loop, request handlers
@@ -182,6 +186,7 @@ Trigger/global data methods:
 - `agent.global_value(index)`
 - `agent.set_global_value(index, value)`
 - `agent.list_globals()`
+- `editor.save_map()`
 
 Diagnostic methods:
 
@@ -194,6 +199,11 @@ Runtime smoke script:
 - `python Development\AI\ydagent_tui.py live --start --restore --map <map.w3x>`
 - `python Development\AI\ydagent_smoke.py`
 - `python Development\AI\ydagent_smoke.py --restore`
+- `python Development\AI\ydagent_client.py save_map`
+
+For a cold real-editor session, query `status`/`list_triggers`/`list_globals`
+only after `save_map`; trigger/global caches are typically empty before the
+first save/compile cycle.
 
 Supported providers are `claude`, `openai`, `local`, and `local_llm`.
 Cloud provider keys are read from `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`
@@ -298,3 +308,29 @@ Recommended implementation order:
 5. Trigger explanation templates
 6. Natural-language common trigger templates
 7. Object editor AI batch workflow
+
+### 2026-05-08 RPC / 验证补充
+
+- `editor.save_map()` / `ydagent_client.py save_map`
+  - 已作为默认真实回归入口使用。
+  - 冷启动后 `trigger_count/global_count` 可能为 0；一次真实保存编译后即可回到真实数据。
+- `agent.list_globals()` / `agent.global_value()`
+  - 现已基于 `currentmapscript.j` 的 `globals` 与 `InitGlobals` 联合解析。
+  - 适用于读取初始化后值，例如真实回读 `udg_compose_stage="armed"`。
+- `agent.create_global(name, type_name, value)` / `agent.delete_global(name)`
+  - CLI 入口已加到 `ydagent_client.py`。
+  - 这些入口当前仅代表地图级文件编辑方向，不代表运行时内存写能力已经恢复。
+- 仍然不要把 `ydt_set_global_value` 视为可用的运行时写接口；它依旧是安全禁用状态。
+
+已验证的真实交付示例：
+
+- 地图：`Q:\AppData\ydwe\work\compose_demo_ascii.w3x`
+- 真实触发器：
+  - `DefinedFormula`
+  - `合成事件`
+- 真实全局：
+  - `udg_compose_ready=0`
+  - `udg_compose_stage="armed"`
+- 编译脚本：
+  - `YDWENewItemsFormula(... 'ratc')`
+  - `InitItemComposeSmoke`

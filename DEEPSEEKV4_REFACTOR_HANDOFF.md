@@ -1,6 +1,6 @@
 # YDWE Refactor DeepSeek V4 Handoff
 
-Last updated: 2026-05-05
+Last updated: 2026-05-08
 
 This document is the execution guide for a DeepSeek V4 based agent to continue
 `ydwe-refactor`. It is intentionally operational: follow the task order, run the
@@ -43,6 +43,11 @@ The modernization baseline is in place:
   `stub --restore` starts `YDAgentServerWorker.lua` with `YDAGENT_TEST_STUB`,
   runs JSON-RPC/AI dry-run/global-write-rejection checks, verifies reversible
   trigger rename, and exits without user interaction.
+- `Development\AI\ydagent_client.py save_map` now triggers a real editor save
+  through `editor.save_map`, waits for the worker to reconnect, and is the
+  preferred way to populate trigger/global caches in a live session.
+- `YDAgentDump` auto-save smoke hooks are disabled in all active plugin config
+  roots because they destabilized live save verification.
 
 Known source files for the Agent path:
 
@@ -72,6 +77,85 @@ Expected result:
 
 - `YDTrigger.vcxproj` succeeds.
 - `YDWE_Test.vcxproj` succeeds.
+
+### 2026-05-07 Progress Update (Current handoff)
+
+- `AgentAPI.cpp` regression from prior refactor was traced to a local simplification pass that removed trigger/global implementation details (`ydt_add_eca`, `ydt_create_trigger`, `ydt_delete_trigger`) and changed export expectations.
+- I restored `AgentAPI.cpp` back to the project HEAD-compatible implementation and removed the stray `YDTrigger.def` export of `ydt_mem_dump` to recover link health.
+- Build now succeeds with local MSBuild:
+  - `rtk "Q:\Apps\VisualStudioProfessional2022\MSBuild\Current\Bin\MSBuild.exe" Development\Plugin\WE\YDTrigger\YDTrigger.vcxproj /p:Configuration=Debug /p:Platform=Win32 /p:PlatformToolset=v143 /m`
+- Compiled DLL has been copied into `Development\Component\plugin\YDTrigger.dll` and `Build\publish\Debug\plugin\YDTrigger.dll`.
+
+### 2026-05-08 Progress Update
+
+- Real-session verification now starts from `Build\publish\Debug\YDWE.exe`;
+  do not directly launch `worldedit.exe`. YDWE will spawn
+  `worldeditydwe.exe` itself.
+- `YDAgentServerWorker.lua` now exposes `editor.save_map()`. It finds the live
+  editor window for the current process, resolves the real menu item caption
+  (`保存地图(&S)` / `Save Map`), and dispatches `WM_COMMAND` instead of relying
+  on blind key simulation.
+- `Development\AI\ydagent_client.py save_map` calls `editor.save_map` and waits
+  for `diag.status` to come back after the save/compile cycle.
+- Real demo-map verification on
+  `Development\Component\example(演示地图)\AI\AI——RPG佣兵AI.w3x` passed:
+  before save, `trigger_count=0` and `global_count=0`; after scripted
+  `save_map`, `trigger_count=4` and `global_count=20`.
+- Real trigger mutation is verified on the same map:
+  `begin -> begin__AI_SMOKE__ -> begin`.
+- Real global read is verified on the same map. Example:
+  `udg_i` (`index=3`, `type=integer`) reads back `0`.
+- Real global write is still intentionally blocked. `agent.set_global_value`
+  returns `false`, and `Development\Plugin\WE\YDTrigger\AgentAPI.cpp`
+  currently implements `ydt_set_global_value(...) { return 0; }` to avoid the
+  previously observed save corruption path.
+- A second scripted `save_map` after the mutation tests completed without
+  crashing the live session; `diag.status` still reported `trigger_count=4` and
+  `global_count=20`.
+
+### Current no-GUI verification
+
+`YDTrigger` C++/RPC surface is healthy at the stub layer, and the real GUI path
+has been verified on a live demo map. Keep the live checklist below as the
+regression script for future changes.
+
+```powershell
+rtk python Development\AI\ydagent_tui.py stub --restore
+```
+
+Expected result (example):
+
+```
+=== YDWE Agent TUI - stub loopback ===
+[PASS] diag.status
+[PASS] diag.smoke
+[PASS] agent.list_triggers
+[PASS] agent.list_globals
+[PASS] agent.compress_context
+[PASS] ai.operation_schema
+[PASS] ai.apply_plan dry-run
+[PASS] agent.set_global_value rejects unsafe write
+[PASS] agent.set_trigger_name mutate
+[PASS] agent.trigger_name verify mutation
+[PASS] agent.trigger_name verify restore
+=== Summary: 11 passed, 0 failed ===
+```
+
+Current real-GUI checkpoint status:
+1. open exactly one `YDWE.exe` session;
+2. load a map that has GUI triggers and globals;
+3. run `rtk python Development\AI\ydagent_client.py save_map`;
+4. run:
+   - `rtk python Development\AI\ydagent_client.py status`
+   - `rtk python Development\AI\ydagent_client.py list_triggers`
+   - `rtk python Development\AI\ydagent_client.py rpc agent.list_globals`
+   - `rtk python Development\AI\ydagent_client.py set_trigger_name 0 "begin__AI_SMOKE__"`
+   - `rtk python Development\AI\ydagent_client.py set_trigger_name 0 "begin"`
+   - `rtk python Development\AI\ydagent_client.py set_global_value 3 123`
+5. expected result:
+   - trigger/global counts become non-zero after `save_map`;
+   - trigger rename is reversible;
+   - `set_global_value` currently returns `FAIL` until a safe write path exists.
 
 ### Unit Test Gate
 
@@ -311,18 +395,18 @@ Goal: make global variable read/write type-aware and less offset-fragile.
 
 Tasks:
 
-- Identify exact global variable structure offsets for name/type/value.
-- Validate `GetGlobalVarName` hook captures the correct container in real maps.
+- Identify exact global variable structure offsets for name/type/value. (Status: Offset for string value identified at `varray + index * 0x1C0 + 0x92`. Name offset confirmed, type offset confirmed).
+- Validate `GetGlobalVarName` hook captures the correct container in real maps. (Passed).
 - Make `ydt_set_global_value` reject incompatible types or apply type-aware
-  encoding.
+  encoding. (Status: Currently reverted to a safe stub returning 0. Raw `BLZSStrCopy` to `0x92` corrupts trigger structures and breaks map saving. Needs a safer mutation method, perhaps calling internal WE functions).
 - Add C++ tests where possible, and runtime smoke coverage through
   `ydagent_smoke.py`.
 
 Acceptance:
 
 - `agent.list_globals` returns stable names/types/values for at least two demo
-  maps with globals.
-- Incorrect type writes return `False` or a JSON-RPC error, not a crash.
+  maps with globals. (Status: Reading is stable using `0x92` offset, but `YDAgentServerWorker.lua` may still return `initial_value` if cached).
+- Incorrect type writes return `False` or a JSON-RPC error, not a crash. (Status: Safe stub prevents crashes, but actual writes are disabled).
 
 ### P3: Review Panel Productization
 
@@ -337,12 +421,16 @@ Tasks:
   snapshots.
 - Add copy, refresh, approve-next-apply, and reject controls.
 - Keep one-shot apply approval semantics.
+- Add AI Provider Configuration UI to configure models, API keys, and endpoints, including support for CLI Coding Agents (gemini, claude, codex, copilot). Done.
+- Implement operation-level apply rollback using pre-operation snapshots. Done.
 
 Acceptance:
 
-- A queued plan can be inspected in the editor without reading raw JSON.
-- Dangerous operations are visibly marked.
-- Apply still requires explicit review token.
+- A queued plan can be inspected in the editor without reading raw JSON. (Passed)
+- Dangerous operations are visibly marked. (Passed)
+- Apply still requires explicit review token. (Passed)
+- Applying an operation that fails will safely roll back previously applied operations. (Passed)
+- Providers can be configured via a GUI panel. (Passed)
 
 ### P4: Natural Language Conversion
 
@@ -376,3 +464,79 @@ When a task changes behavior, update the docs in the same patch:
 
 Never leave completed work listed as "待修复". Use absolute dates such as
 `2026-05-02`.
+
+## 2026-05-08 当前收口状态
+
+本轮针对目标
+`完成全局变量的准确写入，并完成物体编辑器和触发编辑器的修改，在地图中构造出一个简单的地图功能——物品合成和实现全局变量的创建、修改、删除算作成功`
+做了补强和复验。
+
+### 已落地代码
+
+- `Build\publish\Debug\plugin\YDAgentServerWorker.lua`
+  - `load_script_global_types()` 不再只读 `globals` 声明段，现已继续解析 `InitGlobals`，因此 `agent.global_value` / `agent.list_globals` 能准确回读类似 `udg_compose_stage="armed"` 这类初始化赋值。
+  - 新增 `editor.current_map_path()`，用于从 `logs\ydwe.log` 推断当前地图路径；已补控制字符清洗。
+  - 仍保留 `ydt_set_global_value` 的安全 no-op 策略；内存写全局值没有恢复。
+- `Development\AI\ydagent_client.py`
+  - 新增 `create_global` / `delete_global` CLI 入口。
+
+### 真实会话验证
+
+使用：
+
+- `Q:\AppData\ydwe\YDWE\Build\publish\Debug\YDWE.exe`
+- 地图：`Q:\AppData\ydwe\work\compose_demo_ascii.w3x`
+
+验证结果：
+
+- 冷启动后保存前：`trigger_count=0`、`global_count=0`
+- `save_map` 后：`trigger_count=6`、`global_count=24`
+- `agent.list_triggers` 返回：
+  - 原图触发器：`begin`、`shezhi1`、`shezhi2`、`stop`
+  - 新增合成触发器：`DefinedFormula`、`合成事件`
+- `agent.list_globals` 返回：
+  - `udg_compose_ready (integer) = 0`
+  - `udg_compose_stage (string) = "armed"`
+  - 不存在 `udg_compose_temp`
+- 触发器可逆修改再次通过：
+  - `DefinedFormula -> DefinedFormula__AI_SMOKE__ -> DefinedFormula`
+- 再次 `save_map` 后会话稳定，未复现保存即崩溃。
+
+### 文件级证据
+
+- 全局变量 CRUD 结果：
+  - `Q:\AppData\ydwe\work\compose_demo_build\compose_demo_verify_lni\trigger\variable.lml`
+  - 现有：
+    - `compose_ready: integer`
+    - `Def   : 0`
+    - `compose_stage: string`
+    - `Def   : armed`
+  - 已删除：
+    - `compose_temp`
+- 物编结果：
+  - `Q:\AppData\ydwe\work\compose_demo_build\compose_demo_verify_lni\table\item.ini`
+  - 已新增 `[I003]`
+  - `Name = "合成神符"`
+- 触发器结果：
+  - `trigger\2-物品合成测试\1-DefinedFormula.lml`
+  - `trigger\2-物品合成测试\2-合成事件.lml`
+  - 关键调用：
+    - `YDWENewItemsFormula`
+    - `YDWESyStemItemCombineRegistTrigger`
+- 编译脚本结果：
+  - `Build\publish\Debug\logs\currentmapscript.j`
+  - 可见：
+    - `set udg_compose_stage="armed"`
+    - `call YDWENewItemsFormula(... 'rat6', 'rat9', 'I003' ... 'ratc')`
+    - `call ExecuteFunc("InitItemComposeSmoke")`
+
+### 仍然成立的限制
+
+- `ydt_set_global_value` 仍然是安全禁用状态，不能把“真实运行时内存写全局值”算作已解决。
+- 试图直接把当前打开地图当成持久 LNI 工作区去改 `*.w3xTemp\trigger\variable.lml` 这条路当前不成立；该 temp 目录不是稳定常驻的可编辑 LNI 树。
+- 当前已完成的是：
+  - 地图级全局变量创建/修改/删除
+  - 真实会话里的准确读回
+  - 触发器编辑验证
+  - 物编结果验证
+  - 物品合成功能落地图并编译通过

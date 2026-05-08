@@ -127,8 +127,9 @@ public:
 - [x] 实现 JSON-RPC TCP worker（127.0.0.1:27118）和文件 IPC 兜底
 - [x] 实现 AI 服务接口配置层（Claude / OpenAI / local LLM）
 - [x] 实现 AI 操作计划解析、校验、dry-run / confirm 应用流程
+- [x] 实现应用层安全回滚机制和操作前自动快照 (Snapshot/Backup)
+- [x] Review Panel 结构化产品化展示与交互式 AI Provider 配置 UI
 - [ ] 完整触发器 ↔ 自然语言转换器
-- [ ] Review Panel 产品化、快照/回滚和更强运行时诊断
 
 ### 阶段五：Bug 修复
 
@@ -173,16 +174,34 @@ public:
 3. **回归测试**: 验证插件加载正常
 4. **性能测试**: 对比重构前后性能
 
-### 当前验证记录（2026-05-02）
+### 当前验证记录（2026-05-06）
 
 - `Development\Plugin\WE\YDTrigger\YDTrigger.vcxproj` Debug Win32 构建通过。
 - `Development\Test\YDWE_Test.vcxproj` Debug Win32 构建通过。
 - `Build\bin\Debug\test\YDWE_Test.exe` 通过：19 个用例，184 条断言。
 - 新增 C++ AgentAPI mock 覆盖全局变量容器布局、诊断字段和写入拒绝。
 - Agent TCP loopback 使用测试桩通过：`diag.status`、`diag.smoke`、`agent.list_globals`。
-- `Development\AI\ydagent_smoke.py --restore` 用于真实会话触发器可逆改名验证；全局变量写入保持拒绝，直到定位真实可逆存储路径。
+- `Development\AI\ydagent_smoke.py --restore` 用于真实会话触发器可逆改名验证。
+- 真实全局变量读写实验：确认了全局变量字符串值存在于 `varray + index * 0x1C0 + 0x92`。读取已通过验证，但使用 C++ 内存写入（`BLZSStrCopy`）会破坏 WE 内部触发器结构导致保存报错。写入功能已安全回滚为空操作（no-op），确保地图数据安全，等待寻找非破坏性的 API 调用方式。
+
+### 当前验证记录（2026-05-08）
+
+- `YDAgentServerWorker.lua` 现已补充 `InitGlobals` 解析，`agent.list_globals` / `agent.global_value` 能准确反映脚本初始化后的值，而不再只停留在 `globals` 段声明值。
+- 真实地图 `work\compose_demo_ascii.w3x` 会话内验证：
+  - `save_map` 后 `trigger_count=6`、`global_count=24`
+  - `udg_compose_stage` 准确读回 `"armed"`
+  - 新增触发器 `DefinedFormula`、`合成事件` 可见
+  - `DefinedFormula -> DefinedFormula__AI_SMOKE__ -> DefinedFormula` 可逆改名通过
+- 地图级功能演示已完成：
+  - 自定义物品 `[I003] Name="合成神符"`
+  - 新增物品合成触发器
+  - `currentmapscript.j` 中已编译出 `YDWENewItemsFormula(... 'ratc')` 与 `InitItemComposeSmoke`
+- 结论更新：
+  - “准确读取全局值” 已完成
+  - “地图级创建/修改/删除全局变量并落入真实地图” 已完成
+  - “运行时内存直接写全局值” 仍保持禁用
 
 ---
 
 *报告生成时间: 2026-05-01 (重构进行中)*
-*最后更新: 2026-05-02 — Agent RPC 与全局变量 API 修复后同步*
+*最后更新: 2026-05-08 — 已补全全局值准确回读，并完成物品合成演示图上的地图级全局 CRUD / 物编 / 触发器验证；运行时内存写全局值仍禁用*

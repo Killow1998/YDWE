@@ -131,15 +131,19 @@ std::unique_ptr<hook_info> hi(static_cast<hook_info*>(*ph));
 - [x] JSON-RPC 服务端 — TCP worker 已修复，`diag.status` / `diag.smoke` loopback 通过
 - [x] 运行时 smoke 脚本 — `Development\AI\ydagent_smoke.py`，支持 TCP 轮询、诊断检查、`--restore` 触发器可逆改名
 - [x] Agent 自测 TUI/CLI — `Development\AI\ydagent_tui.py stub --restore` 可无 GUI 自启 Lua worker 测试桩并完整环回 JSON-RPC、AI dry-run、全局写入拒绝和触发器可逆改名
+- [x] Live CLI 保存链路 — `Development\AI\ydagent_client.py save_map` 通过 `editor.save_map` 触发真实 YDWE 菜单保存，并在保存/编译后等待 JSON-RPC worker 恢复
 - [x] AI apply 结果可验证 — `ai.apply_plan` dry-run 返回 operation preview/snapshot，非 dry-run 对可读回操作返回 `after` / `verified`
 - [x] Review Panel 结构化审阅 — 显示 summary、validation warnings/errors、cleaned operations、dry-run preview 和 Raw JSON
+- [x] AI Provider 配置 UI — 在菜单中增加配置面板，支持配置 API 端点、模型、API Key，支持 CLI Coding Agents (gemini_cli, claude_code, copilot_cli, codex)
+- [x] 操作应用层安全回滚机制 — 在 `apply_plan` 失败时使用快照安全回滚触发器和物体编辑器字段
 - [x] 物体编辑器属性映射 — `YDAgentFieldMap.lua` SLK 解析完成
 - [x] AI 服务接口 — `YDAgentAI.lua` Claude/OpenAI/Ollama 配置层完成
 - [x] Stub 运行验证 — `YDAGENT_TEST_STUB` 下 TCP/JSON-RPC、`diag.status`、`diag.smoke`、`agent.list_globals` 通过
 - [x] 无 GUI 自测验证 — `python Development\AI\ydagent_tui.py stub --restore` 通过 11 项检查，0 失败
 - [x] C++ AgentAPI mock host 验证 — `test_agent_globals.cpp` 覆盖全局变量容器 `This+0x08` / `This+0x0C + index*0x1C0 + 0x2E`、诊断字段和写入拒绝
 - [x] 真实 YDWE Agent 触发器读写验证 — 通过 YDWE 外壳启动编辑器后，`diag.status` / `diag.smoke` 通过；保存触发编译后可读取 5 个真实触发器，并已完成触发器 0 可逆改名和恢复
-- [x] 真实 YDWE Agent 全局变量名称/类型/声明初始值读取验证 — 保存触发编译后 `agent.list_globals` 返回 17 个真实全局变量，Lua Worker 从 `currentmapscript.j` 的 `globals` 声明合并 `type` / `type_name` / `array` / 标量声明初始值；运行期真实值读取和可逆改值仍待后续实现
+- [x] 真实 YDWE Agent 全局变量名称/类型/声明初始值读取验证 — 保存触发编译后 `agent.list_globals` 返回 17 个真实全局变量，Lua Worker 从 `currentmapscript.j` 的 `globals` 声明合并 `type` / `type_name` / `array` / 标量声明初始值。
+- [x] 真实 YDWE Agent 全局变量运行期值内存探查 — 确认了 `This + 0x0C` (varray) 中 `var_ptr + 0x92` 是字符串值的真实存放地址，读取成功。但通过 C++ 直接使用 `BLZSStrCopy` 修改此地址会导致 WE 触发器结构损坏和保存失败。因此 `agent.set_global_value` 目前已安全回滚为空操作（no-op），等待寻找更安全的内部 API 调用方式。
 
 ### 阶段五：Bug 修复 (进行中)
 - [x] 物体编辑器解析器安全加固（mod_count 限制）
@@ -195,6 +199,50 @@ All tests passed (184 assertions in 19 test cases)
 - `agent.set_global_value` 对声明型真实全局变量当前返回 JSON `false`，底层 `ydt_set_global_value` 也拒绝写入，避免只改 Agent 缓存造成假成功
 - 本次演示地图保存编译会因地图内生成 JASS 错误中断，但不影响触发器缓存捕获和 RPC 读写验证
 
+2026-05-08 补充验证（`AI——RPG佣兵AI.w3x`）：
+
+- 真实会话必须从 `Build\publish\Debug\YDWE.exe` 启动，由 YDWE 自己拉起 `worldeditydwe.exe`；不要直接启动 `worldedit.exe`
+- 新增 `editor.save_map` / `ydagent_client.py save_map` 后，不再依赖人工点击保存
+- 冷启动载入地图后，保存前 `trigger_count=0`、`global_count=0`
+- 脚本化 `save_map` 后，`diag.status` 回读 `trigger_count=4`、`global_count=20`
+- `agent.list_triggers` 返回真实触发器 `begin`、`shezhi1`、`shezhi2`、`stop`
+- 触发器 0 已再次完成可逆改名验证：`begin -> begin__AI_SMOKE__ -> begin`
+- `agent.list_globals` 返回 20 个真实全局变量；`udg_i(index=3, integer)` 的当前读值为 `0`
+- `agent.set_global_value 3 123` 返回 `FAIL`，随后 `agent.global_value 3` 仍为 `0`
+- 原因已收敛：`Development\Plugin\WE\YDTrigger\AgentAPI.cpp` 中 `ydt_set_global_value` 当前明确 `return 0;`，全局写入仍处于安全禁用状态
+- 关闭 `YDAgentDump` 自动保存后，再执行一次脚本化 `save_map` 仍保持会话稳定，未复现此前的保存后崩溃
+
+2026-05-08 进一步验证（`compose_demo_ascii.w3x` / 物品合成演示图）：
+
+- `YDAgentServerWorker.lua` 现已从 `currentmapscript.j` 的 `globals + InitGlobals` 两段合并解析全局变量，因此 `agent.list_globals` 不再只返回声明初值
+- 真实会话中，`udg_compose_stage(index=11, string)` 已能准确读回 `"armed"`
+- 验证树 `work\compose_demo_build\compose_demo_verify_lni\trigger\variable.lml` 已确认：
+  - 创建：`compose_ready`
+  - 创建并修改：`compose_stage -> armed`
+  - 创建后删除：`compose_temp` 已不存在
+- 真实会话 `agent.list_globals` 中可见：
+  - `udg_compose_ready=0`
+  - `udg_compose_stage="armed"`
+  - `udg_compose_temp` 不存在
+- 真实会话 `agent.list_triggers` 中可见新增触发器：
+  - `DefinedFormula`
+  - `合成事件`
+- 触发器 4 再次完成可逆改名：
+  - `DefinedFormula -> DefinedFormula__AI_SMOKE__ -> DefinedFormula`
+- 验证树 `work\compose_demo_build\compose_demo_verify_lni\table\item.ini` 已确认新增自定义物品：
+  - `[I003]`
+  - `Name = "合成神符"`
+- 编译产物 `Build\publish\Debug\logs\currentmapscript.j` 已确认：
+  - `set udg_compose_stage="armed"`
+  - `CreateItem('rat6'/'rat9'/'I003')`
+  - `call YDWENewItemsFormula(... 'ratc')`
+  - `call ExecuteFunc("InitItemComposeSmoke")`
+- 结论：
+  - 地图级全局变量创建/修改/删除已完成并有真实回读证据
+  - 物体编辑器修改已通过自定义物品 `I003` 落地
+  - 触发编辑器修改已通过新增触发器和可逆改名落地
+  - 简单地图功能“物品合成”已构造并编译进入真实地图
+
 ## ⚠️ 已知问题
 
 1. **第三方库警告**: bee.lua 的 fmt 库有 C4996 弃用警告（stdext::checked_array_iterator）
@@ -221,5 +269,5 @@ All tests passed (184 assertions in 19 test cases)
 
 ---
 
-*最后更新: 2026-05-05 — Agent 真实 YDWE 全局变量名称/类型/声明初始值验证通过，运行期真实值与写入待定位*
+*最后更新: 2026-05-08 — 已补全 `InitGlobals` 级全局值准确回读，并完成物品合成演示图上的全局 CRUD / 物编 / 触发器实证；运行时内存写全局值仍安全禁用*
 *重构报告: `REFACTORING_REPORT.md`*
