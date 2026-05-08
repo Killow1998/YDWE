@@ -61,6 +61,13 @@ local function show_agent_apply_notice()
     end
 end
 
+local function show_agent_config_panel()
+    local agent_ui = load_agent_ui()
+    if agent_ui then
+        agent_ui.show_config_panel(main_window_handle)
+    end
+end
+
 local function show_agent_review_panel()
     local agent_ui = load_agent_ui()
     if agent_ui then
@@ -90,6 +97,7 @@ function event.EVENT_INIT_MENU(event_data)
 	menu:add(LNG.MENU_CREDITS, open_thanks)
 	local agent_menu = gui.menu(event_data.main_menu_handle, 'YDWE AI Agent')
 	agent_menu:add('Agent Status', show_agent_status)
+	agent_menu:add('Provider Config', show_agent_config_panel)
 	agent_menu:add('Safe Operations', show_agent_operations)
 	agent_menu:add('Generate Panel', show_agent_generate_panel)
 	agent_menu:add('Review Panel', show_agent_review_panel)

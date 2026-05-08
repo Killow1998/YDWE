@@ -31,6 +31,18 @@ local PROVIDERS = {
         endpoint = "http://127.0.0.1:11434/api/chat",
         api_key_env = "",
     },
+    gemini_cli = {
+        endpoint = "cli", command = "gemini", args = {"ask", "--no-stream"}
+    },
+    claude_code = {
+        endpoint = "cli", command = "claude", args = {"-p"}
+    },
+    copilot_cli = {
+        endpoint = "cli", command = "github-copilot-cli", args = {"what-the-shell"}
+    },
+    codex = {
+        endpoint = "cli", command = "codex", args = {}
+    },
 }
 
 local function copy_table(t)
@@ -139,13 +151,20 @@ local function build_request(cfg, prompt, context, options)
         headers[k] = v
     end
 
-    return {
+    local endpoint = options.endpoint or cfg.endpoint
+    local req = {
         provider = provider,
-        endpoint = options.endpoint or cfg.endpoint,
+        endpoint = endpoint,
         headers = headers,
         body = body,
         timeout = options.timeout or cfg.timeout,
     }
+    
+    if endpoint == "cli" then
+        req.command = cfg.command
+        req.args = cfg.args
+    end
+    return req
 end
 
 local function redacted(headers)
@@ -168,6 +187,39 @@ local function write_temp(data)
     f:write(data)
     f:close()
     return path
+end
+
+local function run_cli_agent(req)
+    local full_prompt = ""
+    for _, msg in ipairs(req.body.messages or {}) do
+        full_prompt = full_prompt .. (msg.content or "") .. "\n\n"
+    end
+
+    local args = { req.command }
+    for _, a in ipairs(req.args or {}) do
+        args[#args + 1] = a
+    end
+    args[#args + 1] = full_prompt
+
+    local process = subprocess.spawn({
+        args,
+        stdout = true,
+        stderr = true,
+        console = "disable",
+    })
+    
+    if not process then
+        return nil, "failed to start " .. tostring(req.command)
+    end
+
+    local out = process.stdout:read 'a'
+    local stderr = process.stderr:read 'a'
+    local code = process:wait()
+
+    if code ~= 0 then
+        return nil, stderr ~= "" and stderr or (tostring(req.command) .. " exited with " .. tostring(code))
+    end
+    return out
 end
 
 local function run_curl(req)
@@ -400,7 +452,9 @@ end
 function M.complete(prompt, context, options)
     options = options or {}
     if not config.model or config.model == "" then
-        return nil, "ai model is not configured"
+        if config.endpoint ~= "cli" then
+            return nil, "ai model is not configured"
+        end
     end
     if (config.provider == "openai" or config.provider == "claude") and not get_api_key(config) then
         return nil, "missing api key; set " .. tostring(config.api_key_env) .. " or configure api_key"
@@ -410,7 +464,14 @@ function M.complete(prompt, context, options)
     if options.dry_run == true then
         return M.build(prompt, context, options)
     end
-    local response, err = run_curl(req)
+    
+    local response, err
+    if req.endpoint == "cli" then
+        response, err = run_cli_agent(req)
+    else
+        response, err = run_curl(req)
+    end
+    
     if not response then
         return nil, err
     end

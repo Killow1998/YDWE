@@ -3,6 +3,8 @@ local log = require "log"
 require "bee"
 local socket = require "bee.socket"
 local thread = require "bee.thread"
+local sleep = require "ffi.sleep"
+local uni = require "ffi.unicode"
 
 local field_map = require "YDAgentFieldMap"
 local ai = require "YDAgentAI"
@@ -29,6 +31,10 @@ local function open_channel(name)
 end
 
 ffi.cdef[[
+    typedef int HWND;
+    typedef int HMENU;
+    typedef int WPARAM;
+    typedef int LPARAM;
     int  ydt_refresh(void);
     int  ydt_get_trigger_count(void);
     const char* ydt_get_trigger_name(int trig_index);
@@ -55,6 +61,18 @@ ffi.cdef[[
     const char* ydt_global_diag(void);
     const char* ydt_read_object_file(const char* file_path);
     int  ydt_write_object_file(const char* file_path, const char* json_data);
+    const char* ydt_mem_dump(uint32_t addr, uint32_t size);
+    int __stdcall GetCurrentProcessId();
+    int __stdcall FindWindowExW(int hWndParent, int hWndChildAfter, const wchar_t* lpszClass, const wchar_t* lpszWindow);
+    int __stdcall GetWindowThreadProcessId(int hWnd, int* lpdwProcessId);
+    int __stdcall SendMessageW(HWND hWnd, unsigned int Msg, WPARAM wParam, LPARAM lParam);
+    int __stdcall SetForegroundWindow(HWND hWnd);
+    int __stdcall BringWindowToTop(HWND hWnd);
+    HMENU __stdcall GetMenu(HWND hWnd);
+    HMENU __stdcall GetSubMenu(HMENU hMenu, int nPos);
+    int __stdcall GetMenuItemCount(HMENU hMenu);
+    int __stdcall GetMenuStringW(HMENU hMenu, unsigned int uIDItem, wchar_t* lpString, int cchMax, unsigned int uFlag);
+    unsigned int __stdcall GetMenuItemID(HMENU hMenu, int nPos);
 ]]
 
 local YDT = rawget(_G, "YDAGENT_TEST_STUB")
@@ -65,6 +83,120 @@ if not YDT then
         return
     end
     YDT = loaded_ydt
+end
+
+local WM_KEYDOWN = 0x0100
+local WM_KEYUP = 0x0101
+local WM_COMMAND = 0x0111
+local VK_F10 = 0x79
+local MF_BYPOSITION = 0x0400
+local WAR3_WINDOW_CLASS = uni.u2w("Warcraft III")
+
+local function find_editor_window()
+    local current_pid = ffi.C.GetCurrentProcessId()
+    local pid = ffi.new("int[1]", 0)
+    local hwnd = 0
+    while true do
+        hwnd = ffi.C.FindWindowExW(0, hwnd, WAR3_WINDOW_CLASS, nil)
+        if hwnd == 0 then
+            return nil
+        end
+        ffi.C.GetWindowThreadProcessId(hwnd, pid)
+        if pid[0] == current_pid then
+            return hwnd
+        end
+    end
+end
+
+local function send_key(hwnd, vk, delay_ms)
+    ffi.C.SendMessageW(hwnd, WM_KEYDOWN, vk, 0)
+    ffi.C.SendMessageW(hwnd, WM_KEYUP, vk, 0)
+    if delay_ms and delay_ms > 0 then
+        sleep(delay_ms)
+    end
+end
+
+local function get_menu_text(menu, pos)
+    local buf = ffi.new("wchar_t[256]")
+    local len = ffi.C.GetMenuStringW(menu, pos, buf, 255, MF_BYPOSITION)
+    if len <= 0 then
+        return ""
+    end
+    return uni.w2u(buf, len)
+end
+
+local function is_save_caption(text)
+    if not text or text == "" then
+        return false
+    end
+    local lower = text:lower()
+    if lower:find("save map as", 1, true) or lower:find("save as", 1, true) then
+        return false
+    end
+    if lower:find("calculate shadows", 1, true) then
+        return false
+    end
+    if text:find("另存为", 1, true) or text:find("阴影", 1, true) then
+        return false
+    end
+    return lower:find("save map", 1, true) ~= nil or text:find("保存地图", 1, true) ~= nil
+end
+
+local function find_save_command_id(hwnd)
+    local menu = ffi.C.GetMenu(hwnd)
+    if not menu or menu == 0 then
+        return nil
+    end
+    local top_count = ffi.C.GetMenuItemCount(menu)
+    if top_count <= 0 then
+        return nil
+    end
+    for top = 0, top_count - 1 do
+        local submenu = ffi.C.GetSubMenu(menu, top)
+        if submenu and submenu ~= 0 then
+            local item_count = ffi.C.GetMenuItemCount(submenu)
+            for pos = 0, item_count - 1 do
+                local text = get_menu_text(submenu, pos)
+                if is_save_caption(text) then
+                    local command_id = ffi.C.GetMenuItemID(submenu, pos)
+                    if command_id and command_id ~= 0xFFFFFFFF then
+                        return tonumber(command_id), text
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local editor = {}
+
+function editor.save_map()
+    local hwnd = find_editor_window()
+    if not hwnd or hwnd == 0 then
+        return nil, "YDWE editor window not found"
+    end
+    ffi.C.SetForegroundWindow(hwnd)
+    ffi.C.BringWindowToTop(hwnd)
+    local command_id, caption = find_save_command_id(hwnd)
+    if command_id then
+        ffi.C.SendMessageW(hwnd, WM_COMMAND, command_id, 0)
+        return {
+            ok = true,
+            hwnd = tonumber(hwnd),
+            action = "wm_command",
+            command_id = command_id,
+            caption = caption,
+        }
+    end
+    send_key(hwnd, VK_F10, 150)
+    send_key(hwnd, string.byte("F"), 150)
+    send_key(hwnd, string.byte("S"), 150)
+    return {
+        ok = true,
+        hwnd = tonumber(hwnd),
+        action = "menu_save_fallback",
+    }
 end
 local ok_field_map, field_map_err = pcall(field_map.load, COMPONENT_ROOT)
 if not ok_field_map then
@@ -395,6 +527,43 @@ local function trim(s)
     return (s:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
+local DEFAULT_GLOBAL_OPTION_KEY = "Def   "
+
+local function default_global_value_for_type(type_name)
+    if type_name == "integer" then
+        return "0"
+    elseif type_name == "real" then
+        return "0.0"
+    elseif type_name == "boolean" then
+        return "false"
+    elseif type_name == "string" then
+        return ""
+    end
+    return nil
+end
+
+local function normalize_global_name(name)
+    if type(name) ~= "string" then
+        return nil
+    end
+    name = trim(name)
+    if name == "" then
+        return nil
+    end
+    if name:match("^udg_[%a_][%w_]*$") then
+        return name:sub(5)
+    end
+    return name
+end
+
+local function live_global_name(name)
+    local normalized = normalize_global_name(name)
+    if not normalized then
+        return nil
+    end
+    return "udg_" .. normalized
+end
+
 local function load_script_global_types()
     local f = io.open(path_join(COMPONENT_ROOT, "logs\\currentmapscript.j"), "rb")
     if not f then
@@ -402,12 +571,13 @@ local function load_script_global_types()
     end
     local types = {}
     local in_globals = false
+    local in_init_globals = false
     for line in f:lines() do
         local stripped = line:gsub("//.*$", "")
         if stripped:match("^%s*globals%s*$") then
             in_globals = true
         elseif stripped:match("^%s*endglobals%s*$") then
-            break
+            in_globals = false
         elseif in_globals then
             local value = stripped:match("=%s*(.-)%s*$")
             local decl = stripped:gsub("=%s*.-%s*$", "")
@@ -432,10 +602,285 @@ local function load_script_global_types()
                     initial_value = value and trim(value) or nil,
                 }
             end
+        elseif stripped:match("^%s*function%s+InitGlobals%s+takes%s+nothing%s+returns%s+nothing%s*$") then
+            in_init_globals = true
+        elseif in_init_globals and stripped:match("^%s*endfunction%s*$") then
+            in_init_globals = false
+        elseif in_init_globals then
+            local name, value = stripped:match("^%s*set%s+([%a_][%w_]*)%s*=%s*(.-)%s*$")
+            if name and value and types[name] and not types[name].array then
+                types[name].initial_value = trim(value)
+            end
         end
     end
     f:close()
     return types
+end
+
+local function current_map_path()
+    local f = io.open(path_join(COMPONENT_ROOT, "logs\\ydwe.log"), "rb")
+    if not f then
+        return nil, "ydwe.log not found"
+    end
+    local last = nil
+    for line in f:lines() do
+        local open_path = line:match("Open map\t(.+)$")
+        if open_path and open_path ~= "" then
+            last = open_path
+        end
+        local save_path = line:match("Saving%s+(.+)$")
+        if save_path and save_path ~= "" then
+            last = save_path
+        end
+    end
+    f:close()
+    if not last then
+        return nil, "current map path not found in log"
+    end
+    last = last:gsub("[%z\001-\031]", "")
+    last = trim(last:gsub("/", "\\"))
+    return last
+end
+
+function editor.current_map_path()
+    return current_map_path()
+end
+
+local function resolve_map_temp_dir(map_path)
+    if type(map_path) ~= "string" or map_path == "" then
+        map_path = current_map_path()
+    end
+    if type(map_path) ~= "string" or map_path == "" then
+        return nil, "map path is required"
+    end
+    if map_path:match("%.w3x[Tt]emp[\\/]?$") then
+        return map_path
+    end
+    return map_path .. "Temp"
+end
+
+local function read_all_lines(path)
+    local f = io.open(path, "rb")
+    if not f then
+        return nil, "cannot open file: " .. tostring(path)
+    end
+    local lines = {}
+    for line in f:lines() do
+        lines[#lines + 1] = line
+    end
+    f:close()
+    return lines
+end
+
+local function parse_variable_lml(path)
+    local lines, err = read_all_lines(path)
+    if not lines then
+        return nil, err
+    end
+    local vars = {}
+    local current = nil
+    for _, raw_line in ipairs(lines) do
+        if raw_line ~= "" then
+            if raw_line:match("^%s%s%s%s") then
+                if not current then
+                    return nil, "orphan variable option in " .. tostring(path)
+                end
+                local inner = raw_line:gsub("^%s+", "")
+                local key, value = inner:match("^([^:]+):%s*(.*)$")
+                if key then
+                    key = trim(key)
+                    current.options[key] = value or ""
+                    current.option_order[#current.option_order + 1] = key
+                end
+            else
+                local name, type_name = raw_line:match("^([^:]+):%s*(.+)$")
+                if not name or not type_name then
+                    return nil, "invalid variable declaration: " .. tostring(raw_line)
+                end
+                current = {
+                    name = trim(name),
+                    type_name = trim(type_name),
+                    options = {},
+                    option_order = {},
+                }
+                vars[#vars + 1] = current
+            end
+        end
+    end
+    return vars
+end
+
+local function write_variable_lml(path, vars)
+    local f = io.open(path, "wb")
+    if not f then
+        return nil, "cannot write file: " .. tostring(path)
+    end
+    for _, var in ipairs(vars or {}) do
+        f:write(var.name, ": ", var.type_name, "\n")
+        local emitted = {}
+        for _, key in ipairs(var.option_order or {}) do
+            if not emitted[key] and var.options[key] ~= nil then
+                f:write("    ", key, ": ", tostring(var.options[key]), "\n")
+                emitted[key] = true
+            end
+        end
+        for key, value in pairs(var.options or {}) do
+            if not emitted[key] then
+                f:write("    ", key, ": ", tostring(value), "\n")
+            end
+        end
+    end
+    f:close()
+    return true
+end
+
+local function get_variable_lml_path(map_path)
+    local temp_dir, err = resolve_map_temp_dir(map_path)
+    if not temp_dir then
+        return nil, err
+    end
+    return path_join(temp_dir, "trigger\\variable.lml")
+end
+
+local function read_variable_file(map_path)
+    local variable_path, err = get_variable_lml_path(map_path)
+    if not variable_path then
+        return nil, err
+    end
+    local vars, parse_err = parse_variable_lml(variable_path)
+    if not vars then
+        return nil, parse_err
+    end
+    return vars, variable_path
+end
+
+local function find_variable(vars, name)
+    local normalized = normalize_global_name(name)
+    if not normalized then
+        return nil, nil
+    end
+    for index, var in ipairs(vars or {}) do
+        if var.name == normalized then
+            return var, index
+        end
+    end
+    return nil, nil
+end
+
+local function ensure_default_option(var)
+    local found = nil
+    for _, key in ipairs(var.option_order or {}) do
+        if key:match("^Def") then
+            found = key
+            break
+        end
+    end
+    if not found then
+        found = DEFAULT_GLOBAL_OPTION_KEY
+        var.option_order = var.option_order or {}
+        var.option_order[#var.option_order + 1] = found
+    end
+    return found
+end
+
+local function write_globals_file(map_path, vars)
+    local variable_path, err = get_variable_lml_path(map_path)
+    if not variable_path then
+        return nil, err
+    end
+    return write_variable_lml(variable_path, vars)
+end
+
+local function file_global_value(name, map_path)
+    local vars, err = read_variable_file(map_path)
+    if not vars then
+        return nil, err
+    end
+    local var = find_variable(vars, name)
+    if not var then
+        return nil
+    end
+    for _, key in ipairs(var.option_order or {}) do
+        if key:match("^Def") then
+            return var.options[key]
+        end
+    end
+    for key, value in pairs(var.options or {}) do
+        if key:match("^Def") then
+            return value
+        end
+    end
+    return nil
+end
+
+local function file_set_global(name, type_name, value, map_path)
+    local vars, err = read_variable_file(map_path)
+    if not vars then
+        return nil, err
+    end
+    local normalized = normalize_global_name(name)
+    if not normalized then
+        return nil, "invalid global name"
+    end
+    local var = find_variable(vars, normalized)
+    if not var then
+        return nil, "global not found: " .. tostring(name)
+    end
+    if type_name and type_name ~= "" then
+        var.type_name = type_name
+    end
+    local default_key = ensure_default_option(var)
+    var.options[default_key] = tostring(value)
+    return write_globals_file(map_path, vars)
+end
+
+local function file_create_global(name, type_name, value, map_path)
+    local vars, err = read_variable_file(map_path)
+    if not vars then
+        return nil, err
+    end
+    local normalized = normalize_global_name(name)
+    if not normalized then
+        return nil, "invalid global name"
+    end
+    if type(type_name) ~= "string" or type_name == "" then
+        return nil, "type_name is required"
+    end
+    local existing = find_variable(vars, normalized)
+    if existing then
+        return nil, "global already exists: " .. normalized
+    end
+    local default_value = value
+    if default_value == nil then
+        default_value = default_global_value_for_type(type_name)
+    end
+    vars[#vars + 1] = {
+        name = normalized,
+        type_name = type_name,
+        options = {
+            [DEFAULT_GLOBAL_OPTION_KEY] = default_value ~= nil and tostring(default_value) or "",
+        },
+        option_order = { DEFAULT_GLOBAL_OPTION_KEY },
+    }
+    return write_globals_file(map_path, vars)
+end
+
+local function file_delete_global(name, map_path)
+    local vars, err = read_variable_file(map_path)
+    if not vars then
+        return nil, err
+    end
+    local normalized = normalize_global_name(name)
+    if not normalized then
+        return nil, "invalid global name"
+    end
+    for index, var in ipairs(vars) do
+        if var.name == normalized then
+            table.remove(vars, index)
+            return write_globals_file(map_path, vars)
+        end
+    end
+    return nil, "global not found: " .. normalized
 end
 
 local OBJ_TYPES = {
@@ -557,6 +1002,11 @@ function agent.global_type(idx)
 end
 
 function agent.global_value(idx)
+    local val = to_str(YDT.ydt_get_global_value(idx))
+    if val and val ~= "" then
+        return val
+    end
+    
     local name = agent.global_name(idx)
     local info = name and load_script_global_types()[name]
     if info and info.array then
@@ -565,16 +1015,23 @@ function agent.global_value(idx)
     if info then
         return info.initial_value
     end
-    return to_str(YDT.ydt_get_global_value(idx))
+    return nil
 end
 
 function agent.set_global_value(idx, value)
-    local name = agent.global_name(idx)
-    local info = name and load_script_global_types()[name]
-    if info then
-        return false
+    if YDT.ydt_set_global_value(idx, tostring(value)) ~= 0 then
+        return true
     end
-    return YDT.ydt_set_global_value(idx, value) ~= 0
+    local name = agent.global_name(idx)
+    if not name then
+        return nil, "global not found: " .. tostring(idx)
+    end
+    local info = load_script_global_types()[name]
+    if info and info.array then
+        return nil, "array global write is not supported"
+    end
+    local type_name = info and info.name or nil
+    return file_set_global(name, type_name, value)
 end
 
 function agent.list_globals()
@@ -590,7 +1047,7 @@ function agent.list_globals()
         end
         local value = nil
         if not array then
-            value = type_info and type_info.initial_value or agent.global_value(i)
+            value = agent.global_value(i)
         end
         list[#list + 1] = {
             index = i,
@@ -614,6 +1071,18 @@ function agent.global_diag()
         return { raw = raw, error = err }
     end
     return parsed
+end
+
+function agent.create_global(name, type_name, value)
+    return file_create_global(name, type_name, value)
+end
+
+function agent.delete_global(name)
+    return file_delete_global(name)
+end
+
+function agent.file_global_value(name, map_path)
+    return file_global_value(name, map_path)
 end
 
 local function read_eca_list(idx, eca_type)
@@ -1024,7 +1493,7 @@ local function apply_object_set_field(op, options)
     return true
 end
 
-local function snapshot_operation(op)
+local function snapshot_operation(op, options)
     if op.op == "set_trigger_name" then
         return {
             target = "trigger",
@@ -1092,16 +1561,68 @@ local function snapshot_operation(op)
             after = count > 0 and count - 1 or 0,
         }
     elseif op.op == "object_set_field" then
+        local before_val = nil
+        local map_path = options and options.map_path
+        if map_path and map_path ~= "" then
+            local data = object.read(op.type_name, map_path)
+            if data then
+                local decoded = json.decode(data)
+                if decoded and decoded[op.record_kind] then
+                    local rec = find_record(decoded[op.record_kind], op.object_id)
+                    if rec and rec.fields then
+                        before_val = rec.fields[op.field_id]
+                    end
+                end
+            end
+        end
         return {
             target = "object",
             field = op.field_id,
             type_name = op.type_name,
             record_kind = op.record_kind,
             object_id = op.object_id,
+            before = before_val,
             after = op.value,
         }
     end
     return nil
+end
+
+local function revert_operation(op, snapshot, options)
+    if not snapshot then return false end
+    if op.op == "set_trigger_name" then
+        return agent.set_trigger_name(op.trigger_index, snapshot.before)
+    elseif op.op == "set_trigger_disabled" then
+        if snapshot.before == nil then return false end
+        return agent.set_trigger_disabled(op.trigger_index, snapshot.before)
+    elseif op.op == "set_eca_func_name" then
+        if snapshot.before == nil then return false end
+        return agent.set_eca_func_name(op.trigger_index, op.eca_type, op.eca_index, snapshot.before)
+    elseif op.op == "set_eca_active" then
+        return agent.set_eca_active(op.trigger_index, op.eca_type, op.eca_index, true)
+    elseif op.op == "set_eca_param_value" then
+        if snapshot.before == nil then return false end
+        return agent.set_eca_param_value(op.trigger_index, op.eca_type, op.eca_index, op.param_index, snapshot.before)
+    elseif op.op == "add_eca" then
+        if snapshot.before == nil then return false end
+        return agent.remove_eca(op.trigger_index, op.eca_type, snapshot.before)
+    elseif op.op == "remove_eca" then
+        return false
+    elseif op.op == "object_set_field" then
+        local map_path = options and options.map_path
+        if not map_path or map_path == "" then return false end
+        local data = object.read(op.type_name, map_path)
+        if not data then return false end
+        local decoded = json.decode(data)
+        if not decoded then return false end
+        local records = decoded[op.record_kind]
+        local rec = find_record(records, op.object_id)
+        if not rec then return false end
+        rec.fields = rec.fields or {}
+        rec.fields[op.field_id] = snapshot.before
+        return object.write(op.type_name, map_path, json.encode(decoded))
+    end
+    return false
 end
 
 local function verify_operation(op, before)
@@ -1177,7 +1698,7 @@ local function apply_plan(plan, options)
             result.preview[#result.preview + 1] = {
                 index = index,
                 op = op.op,
-                snapshot = snapshot_operation(op),
+                snapshot = snapshot_operation(op, options),
             }
         end
         return result
@@ -1193,12 +1714,14 @@ local function apply_plan(plan, options)
         return result
     end
 
+    local rollbacks = {}
     for index, op in ipairs(validation.operations) do
-        local snapshot = snapshot_operation(op)
+        local snapshot = snapshot_operation(op, options)
         local ok, err = apply_operation(op, options)
         local verified, after = nil, nil
         if ok == true then
             verified, after = verify_operation(op, snapshot)
+            rollbacks[#rollbacks + 1] = { op = op, snapshot = snapshot }
         end
         result.applied[#result.applied + 1] = {
             index = index,
@@ -1211,6 +1734,16 @@ local function apply_plan(plan, options)
         }
         if ok ~= true and options.continue_on_error ~= true then
             result.error = err or "operation failed"
+            result.rollback_results = {}
+            for i = #rollbacks, 1, -1 do
+                local rb = rollbacks[i]
+                local rb_ok = revert_operation(rb.op, rb.snapshot, options)
+                result.rollback_results[#result.rollback_results + 1] = {
+                    op = rb.op.op,
+                    ok = rb_ok == true,
+                }
+            end
+            result.error = result.error .. " (rollback attempted)"
             return result
         end
     end
@@ -1227,6 +1760,21 @@ function ai_rpc.configure(provider, options)
         return nil, err
     end
     return result
+end
+
+function ai_rpc.mem_dump(addr_str, size_str)
+    local addr = tonumber(addr_str)
+    if not addr then return nil, "invalid address" end
+    local size = tonumber(size_str) or 256
+    if size > 8192 then size = 8192 end
+    
+    if YDT.ydt_mem_dump then
+        local cstr = YDT.ydt_mem_dump(addr, size)
+        if cstr ~= nil then
+            return ffi.string(cstr)
+        end
+    end
+    return ""
 end
 
 function ai_rpc.status()
@@ -1431,7 +1979,12 @@ local function dispatch(method, params)
         return nil, -32601, "Method not found: " .. tostring(method)
     end
 
-    local target = namespace == "agent" and agent or namespace == "object" and object or namespace == "ai" and ai_rpc or namespace == "diag" and diag or nil
+    local target = namespace == "agent" and agent
+        or namespace == "object" and object
+        or namespace == "ai" and ai_rpc
+        or namespace == "diag" and diag
+        or namespace == "editor" and editor
+        or nil
     if not target then
         return nil, -32601, "Method not found: " .. tostring(method)
     end

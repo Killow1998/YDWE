@@ -488,6 +488,104 @@ local function line_count(text)
     return n + 1
 end
 
+function M.show_config_panel(hwnd)
+    if not agent_available() then
+        gui.error_message(hwnd, "%s", "YDAgentCore is not loaded.")
+        return false
+    end
+
+    local yue = require 'yue.gui'
+    local win = yue.Window.create {}
+    win:sethasshadow(true)
+    win:setresizable(true)
+    win:setmaximizable(false)
+    win:setminimizable(false)
+    win:setalwaysontop(true)
+    win:setcontentsize { width = 450, height = 300 }
+
+    local root = yue.Container.create()
+    root:setstyle { FlexDirection = 'column', Margin = 10 }
+    win:setcontentview(root)
+
+    local title = yue.Label.create('AI Provider Config')
+    title:setstyle { Height = 28 }
+    title:setfont(yue.Font.create('Segoe UI', 16, "bold", "normal"))
+    root:addchildview(title)
+
+    local function add_field(label_text, default_val)
+        local c = yue.Container.create()
+        c:setstyle { Height = 28, FlexDirection = 'row', MarginBottom = 6 }
+        root:addchildview(c)
+        local l = yue.Label.create(label_text)
+        l:setstyle { Width = 80 }
+        c:addchildview(l)
+        local e = yue.Entry.create()
+        e:setstyle { FlexGrow = 1 }
+        e:settext(default_val or "")
+        c:addchildview(e)
+        return e
+    end
+
+    local current = rpc_result('ai.status') or {}
+    
+    local provider = add_field("Provider:", current.provider or "local_llm")
+    local model = add_field("Model:", current.model or "")
+    local endpoint = add_field("Endpoint:", current.endpoint or "")
+    local api_key = add_field("API Key:", "") -- Don't show current API key for security
+
+    local hint1 = yue.Label.create('API: claude, openai, local_llm, local')
+    hint1:setstyle { Height = 20 }
+    root:addchildview(hint1)
+    local hint2 = yue.Label.create('CLI Agents: gemini_cli, claude_code, copilot_cli, codex')
+    hint2:setstyle { Height = 20, MarginBottom = 10 }
+    root:addchildview(hint2)
+
+    local buttons = yue.Container.create()
+    buttons:setstyle { Height = 36, FlexDirection = 'row-reverse', MarginTop = 10 }
+    root:addchildview(buttons)
+
+    local close = yue.Button.create('Cancel')
+    close:setstyle { Width = 90, MarginLeft = 8 }
+    buttons:addchildview(close)
+
+    local save = yue.Button.create('Save Config')
+    save:setstyle { Width = 100, MarginLeft = 8 }
+    buttons:addchildview(save)
+
+    function save:onclick()
+        local p = provider:gettext()
+        local m = model:gettext()
+        local e = endpoint:gettext()
+        local k = api_key:gettext()
+        local opts = {
+            model = m,
+        }
+        if e ~= "" then opts.endpoint = e end
+        if k ~= "" then opts.api_key = k end
+
+        local res, err = rpc_result('ai.configure', { p, opts })
+        if res then
+            gui.message(hwnd, "%s", "Configuration saved!")
+            win:close()
+        else
+            gui.error_message(hwnd, "%s", "Error: " .. tostring(err))
+        end
+    end
+
+    function close:onclick()
+        win:close()
+    end
+
+    function win:onclose()
+        yue.MessageLoop.quit()
+    end
+
+    win:center()
+    win:activate()
+    yue.MessageLoop.run()
+    return true
+end
+
 function M.show_status(hwnd)
     gui.message(hwnd, "%s", status_text())
 end

@@ -1,7 +1,7 @@
 [Info]
 PluginName = YDAgentDump
 [Load]
-Enable = 1
+Enable = 0
 Loader = YDAgentDump.lua
 Dll    = YDTrigger.dll
 Depends = YDAgentCore

@@ -88,16 +88,19 @@ gitlog((path.Development / 'Component' / 'script' / 'common' / 'gitlog.lua'):str
 -- Step.4 编译
 msvc:compile('rebuild', path.OpenSource / 'bee.lua' / 'bee.sln', {
     Configuration = configuration,
-    Platform = 'x86'
+    Platform = 'x86',
+    PlatformToolset = 'v143'
 })
 msvc:compile('rebuild', path.OpenSource / 'all.sln', {
     Configuration = configuration,
-    Platform = 'Win32'
+    Platform = 'Win32',
+    PlatformToolset = 'v143'
 })
 if not dev then
     msvc:compile('rebuild', path.Development / 'Core' / 'Solution' / 'YDWE.sln', {
         Configuration = configuration,
-        Platform = 'Win32'
+        Platform = 'Win32',
+        PlatformToolset = 'v143'
     })
 end
 

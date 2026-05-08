@@ -8,9 +8,13 @@ Example:
     python ydagent_client.py refresh
     python ydagent_client.py status
     python ydagent_client.py smoke
+    python ydagent_client.py save_map
     python ydagent_client.py list_triggers
     python ydagent_client.py get_eca_tree 0
     python ydagent_client.py set_trigger_name 0 "MyTrigger"
+    python ydagent_client.py set_global_value 3 123
+    python ydagent_client.py create_global compose_flag integer 1
+    python ydagent_client.py delete_global compose_flag
     python ydagent_client.py add_eca 0 2   # add action to trigger 0
     python ydagent_client.py rpc ai.status
 """
@@ -18,6 +22,7 @@ Example:
 import json
 import socket
 import sys
+import time
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 27118
@@ -72,6 +77,22 @@ def pretty(obj, indent=0):
                 pretty(item, indent + 1)
             else:
                 print(f"{prefix}[{i}] {item}")
+    else:
+        print(f"{prefix}{obj}")
+
+
+def wait_for_server(host, port, timeout=30.0):
+    deadline = time.time() + timeout
+    last_error = None
+    while time.time() < deadline:
+        try:
+            return rpc_call(host, port, "diag.status")
+        except Exception as exc:
+            last_error = exc
+            time.sleep(0.5)
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("server did not become ready")
 
 
 def parse_json_arg(value):
@@ -118,6 +139,13 @@ def main():
             result = rpc_call(host, port, "agent.refresh")
             print(f"OK: {result} triggers found")
 
+        elif cmd == "save_map":
+            result = rpc_call(host, port, "editor.save_map")
+            pretty(result)
+            status = wait_for_server(host, port, timeout=30.0)
+            print("status_after_save:")
+            pretty(status)
+
         elif cmd == "list_triggers":
             result = rpc_call(host, port, "agent.list_triggers")
             pretty(result)
@@ -135,6 +163,24 @@ def main():
             idx = int(sys.argv[2])
             name = sys.argv[3]
             result = rpc_call(host, port, "agent.set_trigger_name", [idx, name])
+            print(f"OK" if result else "FAIL")
+
+        elif cmd == "set_global_value":
+            idx = int(sys.argv[2])
+            value = parse_json_arg(sys.argv[3])
+            result = rpc_call(host, port, "agent.set_global_value", [idx, value])
+            print(f"OK" if result else "FAIL")
+
+        elif cmd == "create_global":
+            name = sys.argv[2]
+            type_name = sys.argv[3]
+            value = parse_json_arg(sys.argv[4]) if len(sys.argv) > 4 else None
+            result = rpc_call(host, port, "agent.create_global", [name, type_name, value])
+            print(f"OK" if result else "FAIL")
+
+        elif cmd == "delete_global":
+            name = sys.argv[2]
+            result = rpc_call(host, port, "agent.delete_global", [name])
             print(f"OK" if result else "FAIL")
 
         elif cmd == "set_trigger_disabled":
@@ -200,8 +246,9 @@ def main():
         else:
             print(f"Unknown command: {cmd}")
             print(f"Diagnostic commands: status, smoke, rpc <method> [json_params...]")
-            print(f"Trigger commands: refresh, list_triggers, get_eca_tree, dump_all, ")
-            print(f"  set_trigger_name, set_trigger_disabled, add_eca, remove_eca, set_eca_param")
+            print(f"Trigger commands: refresh, save_map, list_triggers, get_eca_tree, dump_all, ")
+            print(f"  set_trigger_name, set_trigger_disabled, set_global_value, create_global, delete_global")
+            print(f"  add_eca, remove_eca, set_eca_param")
             print(f"Object commands: object_read <type> <map_path>")
             print(f"  object_write <type> <map_path> [json_file]")
             print(f"  Types: unit, item, buff, doodad, ability, hero, upgrade")
