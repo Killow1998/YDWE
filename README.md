@@ -25,6 +25,7 @@ The maintained project documentation is consolidated under
 - live trigger rename
 - live global enumeration
 - staged global override inspection and clearing for normal `.w3x` sessions
+- scalar global-value validation for integer / real / boolean / string defaults
 - LNI-session live global write + immediate readback
 - normal `.w3x` scalar global write + save/compile + reopen readback
 - LNI temp-script save failures caused by leaked control bytes are sanitized at

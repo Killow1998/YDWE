@@ -735,6 +735,49 @@ local function default_global_value_for_type(type_name)
     return nil
 end
 
+local function normalize_global_default_value(type_name, value)
+    if type_name == nil or type_name == "" then
+        if value == nil then
+            return ""
+        end
+        return tostring(value)
+    end
+    if type_name == "string" then
+        return tostring(value or "")
+    end
+    if type_name == "boolean" then
+        if type(value) == "boolean" then
+            return value and "true" or "false"
+        end
+        local lower = tostring(value or ""):lower()
+        if lower == "true" or lower == "1" then
+            return "true"
+        end
+        if lower == "false" or lower == "0" then
+            return "false"
+        end
+        return nil, "invalid boolean global value: " .. tostring(value)
+    end
+    if type_name == "integer" then
+        local number = tonumber(value)
+        if number == nil or number ~= math.floor(number) then
+            return nil, "invalid integer global value: " .. tostring(value)
+        end
+        return tostring(math.floor(number))
+    end
+    if type_name == "real" then
+        local number = tonumber(value)
+        if number == nil then
+            return nil, "invalid real global value: " .. tostring(value)
+        end
+        return tostring(number)
+    end
+    if value == nil then
+        return ""
+    end
+    return tostring(value)
+end
+
 local function normalize_global_name(name)
     if type(name) ~= "string" then
         return nil
@@ -1084,8 +1127,12 @@ local function file_set_global(name, type_name, value, map_path)
     if type_name and type_name ~= "" then
         var.type_name = type_name
     end
+    local normalized_value, value_err = normalize_global_default_value(var.type_name, value)
+    if normalized_value == nil then
+        return nil, value_err
+    end
     local default_key = ensure_default_option(var)
-    var.options[default_key] = tostring(value)
+    var.options[default_key] = normalized_value
     return write_globals_file(map_path, vars)
 end
 
@@ -1104,9 +1151,13 @@ local function stage_pending_global_override(map_path, name, type_name, value)
         entry = {}
         data[map_key] = entry
     end
+    local normalized_value, value_err = normalize_global_default_value(type_name, value)
+    if normalized_value == nil then
+        return nil, value_err
+    end
     entry[live_name] = {
         type_name = type_name or "",
-        value = tostring(value),
+        value = normalized_value,
     }
     return save_pending_global_overrides(data)
 end
@@ -1131,11 +1182,15 @@ local function file_create_global(name, type_name, value, map_path)
     if default_value == nil then
         default_value = default_global_value_for_type(type_name)
     end
+    local normalized_value, value_err = normalize_global_default_value(type_name, default_value)
+    if normalized_value == nil then
+        return nil, value_err
+    end
     vars[#vars + 1] = {
         name = normalized,
         type_name = type_name,
         options = {
-            [DEFAULT_GLOBAL_OPTION_KEY] = default_value ~= nil and tostring(default_value) or "",
+            [DEFAULT_GLOBAL_OPTION_KEY] = normalized_value,
         },
         option_order = { DEFAULT_GLOBAL_OPTION_KEY },
     }

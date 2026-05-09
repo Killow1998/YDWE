@@ -65,6 +65,8 @@ Verified working:
 - in LNI marker sessions, write global values and read them back immediately
 - in normal `.w3x` sessions, write scalar global defaults through the GUI WTG
   source, save/compile, reopen, and read back stable values
+- global default writes validate and normalize scalar input before staging:
+  integer, real, boolean, and string
 - read / write object-editor fields
 - save / compile from CLI through the live editor session
 
@@ -275,7 +277,9 @@ Verified behavior of the final GUI-only compose demo:
   feature, not just a proof
 - pending override management is now exposed through CLI; next validation should
   cover both all-clear and single-global clear against a real pending sidecar
-- expand scalar global write coverage beyond integer and string
+- scalar input validation now covers integer, real, boolean, and string
+- next live validation should persist and reopen `real` and `boolean` globals in
+  a normal `.w3x` session, matching the already verified integer/string path
 - keep direct native memory writes disabled unless a proven safe native path
   exists
 
