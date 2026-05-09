@@ -47,6 +47,8 @@ path is `YDWE.exe -> worldeditydwe.exe`.
 - `ydagent_client.py save_map` is available
 - `ydagent_client.py set_global_value` now distinguishes normal `.w3x` and LNI
   marker sessions
+- `ydagent_client.py pending_globals` and `clear_pending_globals` are available
+  for maintaining staged normal `.w3x` global overrides
 - global parsing reads both `globals` and `InitGlobals`
 - provider configuration UI exists in the editor
 - AI apply flow supports snapshot/rollback
@@ -144,6 +146,28 @@ rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_tui.py stub --restore
 ```
 
 Use this before GUI validation when changing RPC/runtime behavior.
+
+### 7. Pending Global Override Maintenance
+
+Normal `.w3x` global writes are staged before the next save pipeline patches the
+GUI WTG source. Inspect staged overrides:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py pending_globals
+```
+
+Clear all staged overrides after a deliberate manual GUI edit or after moving a
+test map between validation runs:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py clear_pending_globals --all
+```
+
+Clear one map/global pair:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py clear_pending_globals Q:\path\to\map.w3x compose_count
+```
 
 ## Verified Results
 
@@ -247,11 +271,13 @@ Verified behavior of the final GUI-only compose demo:
 
 ### P0
 
+- current active target: harden safe global writeback into an operator-friendly
+  feature, not just a proof
+- pending override management is now exposed through CLI; next validation should
+  cover both all-clear and single-global clear against a real pending sidecar
 - expand scalar global write coverage beyond integer and string
 - keep direct native memory writes disabled unless a proven safe native path
   exists
-- add an explicit maintenance command for clearing normal `.w3x` pending
-  overrides after a deliberate manual GUI edit
 
 ### P1
 

@@ -156,6 +156,16 @@ def run_rpc_suite(host: str, port: int, restore: bool, tui: Tui) -> None:
     globals_ = expect("agent.list_globals", lambda: rpc_call(host, port, "agent.list_globals"), tui)
     require(isinstance(globals_, list), "globals is not a list")
 
+    pending = expect("agent.list_pending_globals", lambda: rpc_call(host, port, "agent.list_pending_globals", ["*"]), tui)
+    require(isinstance(pending, dict), "pending globals is not an object")
+
+    cleared_fake = expect(
+        "agent.clear_pending_globals fake map",
+        lambda: rpc_call(host, port, "agent.clear_pending_globals", ["Q:/ydagent_tui_fake_map.w3x", "udg_TuiInt"]),
+        tui,
+    )
+    require(cleared_fake is True, f"clear fake pending global returned {cleared_fake!r}")
+
     context = expect("agent.compress_context", lambda: rpc_call(host, port, "agent.compress_context", [{"trigger_limit": 3, "node_limit": 3}]), tui)
     require(isinstance(context, dict), "compressed context is not an object")
 

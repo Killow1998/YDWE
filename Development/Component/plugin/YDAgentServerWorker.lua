@@ -635,6 +635,46 @@ local function save_pending_global_overrides(data)
     return true
 end
 
+local function pending_global_overrides_for(map_path)
+    local data = load_pending_global_overrides()
+    if map_path == nil or map_path == "" or map_path == "*" then
+        return data
+    end
+    local map_key = normalize_map_key(map_path)
+    if not map_key then
+        return {}
+    end
+    return data[map_key] or {}
+end
+
+local function clear_pending_global_overrides_for(map_path, global_name)
+    local data = load_pending_global_overrides()
+    if map_path == nil or map_path == "" or map_path == "*" then
+        return save_pending_global_overrides({})
+    end
+
+    local map_key = normalize_map_key(map_path)
+    if not map_key then
+        return nil, "map path is required"
+    end
+
+    if global_name == nil or global_name == "" or global_name == "*" then
+        data[map_key] = nil
+    elseif type(data[map_key]) == "table" then
+        local key = tostring(global_name)
+        data[map_key][key] = nil
+        if key:match("^udg_[%a_][%w_]*$") then
+            data[map_key][key:sub(5)] = nil
+        elseif key:match("^[%a_][%w_]*$") then
+            data[map_key]["udg_" .. key] = nil
+        end
+        if next(data[map_key]) == nil then
+            data[map_key] = nil
+        end
+    end
+    return save_pending_global_overrides(data)
+end
+
 local GLOBAL_TYPE_IDS = {
     integer = 1,
     real = 2,
@@ -1370,6 +1410,20 @@ end
 
 function agent.file_global_value(name, map_path)
     return file_global_value(name, map_path)
+end
+
+function agent.list_pending_globals(map_path)
+    if map_path == nil or map_path == "" then
+        map_path = "*"
+    end
+    return pending_global_overrides_for(map_path)
+end
+
+function agent.clear_pending_globals(map_path, global_name)
+    if map_path == nil or map_path == "" then
+        map_path = "*"
+    end
+    return clear_pending_global_overrides_for(map_path, global_name)
 end
 
 local function read_eca_list(idx, eca_type)

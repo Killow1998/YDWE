@@ -13,6 +13,8 @@ Example:
     python ydagent_client.py get_eca_tree 0
     python ydagent_client.py set_trigger_name 0 "MyTrigger"
     python ydagent_client.py set_global_value 3 123
+    python ydagent_client.py pending_globals
+    python ydagent_client.py clear_pending_globals --all
     python ydagent_client.py create_global compose_flag integer 1
     python ydagent_client.py delete_global compose_flag
     python ydagent_client.py add_eca 0 2   # add action to trigger 0
@@ -213,6 +215,23 @@ def main():
             else:
                 print("MISMATCH")
 
+        elif cmd == "pending_globals":
+            map_path = sys.argv[2] if len(sys.argv) > 2 else "*"
+            if map_path == "--all":
+                map_path = "*"
+            result = rpc_call(host, port, "agent.list_pending_globals", [map_path])
+            pretty(result)
+
+        elif cmd == "clear_pending_globals":
+            map_path = sys.argv[2] if len(sys.argv) > 2 else "*"
+            if map_path == "--all":
+                map_path = "*"
+            global_name = sys.argv[3] if len(sys.argv) > 3 else "*"
+            result = rpc_call(
+                host, port, "agent.clear_pending_globals", [map_path, global_name]
+            )
+            print("OK" if result else "FAIL")
+
         elif cmd == "create_global":
             name = sys.argv[2]
             type_name = sys.argv[3]
@@ -290,6 +309,7 @@ def main():
             print(f"Diagnostic commands: status, smoke, rpc <method> [json_params...]")
             print(f"Trigger commands: refresh, save_map, list_triggers, get_eca_tree, dump_all, ")
             print(f"  set_trigger_name, set_trigger_disabled, set_global_value, create_global, delete_global")
+            print(f"  pending_globals [map_path], clear_pending_globals [map_path|--all] [global_name]")
             print(f"  add_eca, remove_eca, set_eca_param")
             print(f"Object commands: object_read <type> <map_path>")
             print(f"  object_write <type> <map_path> [json_file]")

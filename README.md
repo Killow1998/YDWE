@@ -24,6 +24,7 @@ The maintained project documentation is consolidated under
 - live trigger enumeration
 - live trigger rename
 - live global enumeration
+- staged global override inspection and clearing for normal `.w3x` sessions
 - LNI-session live global write + immediate readback
 - normal `.w3x` scalar global write + save/compile + reopen readback
 - LNI temp-script save failures caused by leaked control bytes are sanitized at
@@ -86,6 +87,7 @@ After opening a map in `YDWE.exe`:
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py save_map
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py rpc agent.list_triggers
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py rpc agent.list_globals
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py pending_globals
 ```
 
 ## Status Source
