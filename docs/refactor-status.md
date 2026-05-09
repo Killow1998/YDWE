@@ -45,6 +45,8 @@ path is `YDWE.exe -> worldeditydwe.exe`.
 - JSON-RPC worker is integrated in the editor runtime
 - `editor.save_map` is implemented
 - `ydagent_client.py save_map` is available
+- `ydagent_client.py set_global_value` now distinguishes normal `.w3x` and LNI
+  marker sessions
 - global parsing reads both `globals` and `InitGlobals`
 - provider configuration UI exists in the editor
 - AI apply flow supports snapshot/rollback
@@ -57,6 +59,10 @@ Verified working:
 - rename real triggers
 - list real globals
 - create / modify / delete globals at map-file level
+- in LNI marker sessions, enumerate globals directly from `trigger/variable.lml`
+- in LNI marker sessions, write global values and read them back immediately
+- in normal `.w3x` sessions, write scalar global defaults through the GUI WTG
+  source, save/compile, reopen, and read back stable values
 - read / write object-editor fields
 - save / compile from CLI through the live editor session
 
@@ -148,8 +154,48 @@ Verified in real YDWE sessions:
 - trigger enumeration works
 - trigger rename is reversible
 - global names/types/values are readable
+- LNI live session global write/readback works without native memory writes
+- normal `.w3x` global write/readback works without native memory writes
 - save/compile can be triggered from CLI
 - object-editor and trigger-editor changes can be materialized into real maps
+
+Concrete evidence from the 2026-05-09 validation pass:
+
+- target session: `Q:\AppData\ydwe\work\compose_demo_counter_build\compose_demo_lni\.w3x`
+- `diag.status` reported `global_count: 13` before any save
+- `agent.global_name 10/11/12` resolved to:
+  - `udg_compose_ready`
+  - `udg_compose_stage`
+  - `udg_compose_count`
+- before write:
+  - `agent.global_value 11 -> armed`
+  - `agent.global_value 12 -> 0`
+- live writes:
+  - `set_global_value 12 7 -> VERIFIED`
+  - `set_global_value 11 "armed_live" -> VERIFIED`
+- backing file readback:
+  - `agent.file_global_value udg_compose_count -> 7`
+  - `agent.file_global_value udg_compose_stage -> armed_live`
+
+Normal `.w3x` persistence evidence from the same validation pass:
+
+- target session: `Q:\AppData\ydwe\work\compose_demo_gui_only_v2.w3x`
+- after initial `save_map`, `diag.status` reported `global_count: 26`
+- `agent.global_name 11/12` resolved to:
+  - `udg_compose_stage`
+  - `udg_compose_count`
+- writes:
+  - `set_global_value 12 13 -> VERIFIED`
+  - `set_global_value 11 armed_persist -> VERIFIED`
+- compiled script evidence:
+  - `set udg_compose_stage="armed_persist"`
+  - `set udg_compose_count=13`
+- hard persistence check:
+  - moved `ydagent_pending_globals.lua` aside
+  - closed and reopened the `.w3x`
+  - ran `save_map`
+  - read back `agent.global_value 11 -> "armed_persist"`
+  - read back `agent.global_value 12 -> 13`
 
 ### Example Validation Target
 
@@ -170,12 +216,13 @@ Verified behavior of the final GUI-only compose demo:
 
 ### Native Global Write
 
-- `ydt_set_global_value` is still a safe no-op in native code
+- the old no-op `ydt_set_global_value` native export has been removed
 - direct runtime memory writes for globals are not re-enabled
-- current safe path is:
-  - edit map-backed data
-  - trigger save/compile
-  - read back through RPC
+- current safe path depends on session type:
+  - normal `.w3x`: patch pending scalar defaults into `war3map.wtg` during the
+    save pipeline, compile, then read back through RPC
+  - LNI marker map: edit `trigger/variable.lml` and read back through the live
+    session RPC fallback
 
 ### Arrays
 
@@ -186,17 +233,30 @@ Verified behavior of the final GUI-only compose demo:
 - editor automation is environment-sensitive
 - tests must start from `YDWE.exe`
 - generated logs and scratch files must be cleaned after testing
+- LNI marker-map temp scripts now sanitize control bytes before Wave compile
+  - this specifically masks the bad `W2L\x01` marker-name leak seen in some
+    reopened `.w3xTemp\war3map.j` files
+  - runtime restart is still required for an already-open editor process to pick
+    up compiler-script changes on disk
+- Agent `save_map` intentionally no-ops on LNI marker maps
+  - YDWE's native GUI save path rewrites the LNI source directory from a temp
+    marker map and can remove source-backed files such as `trigger/variable.lml`
+  - use `set_global_value` directly for LNI marker globals
 
 ## Next-Phase Goals
 
 ### P0
 
-- design a safe native write path for `ydt_set_global_value`
-- keep failure behavior fail-closed until that path is proven safe
+- expand scalar global write coverage beyond integer and string
+- keep direct native memory writes disabled unless a proven safe native path
+  exists
+- add an explicit maintenance command for clearing normal `.w3x` pending
+  overrides after a deliberate manual GUI edit
 
 ### P1
 
-- continue hardening scripted live-session verification
+- harden fresh-session verification so normal `.w3x` and LNI marker writeback can
+  be revalidated automatically
 - keep GUI-trigger-first test cases as the primary proof path
 
 ### P2

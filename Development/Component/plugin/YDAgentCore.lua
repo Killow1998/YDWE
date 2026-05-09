@@ -19,7 +19,6 @@ loader.load = function(path)
         int  ydt_create_trigger(const char*); int ydt_delete_trigger(int);
         int  ydt_get_global_count(void); const char* ydt_get_global_name(int);
         int  ydt_get_global_type(int); const char* ydt_get_global_value(int);
-        int  ydt_set_global_value(int,const char*);
         const char* ydt_read_object_file(const char*); int  ydt_write_object_file(const char*,const char*);
     ]])
     local ok, dll = pcall(ffi.load, path:string())
@@ -55,7 +54,7 @@ function agent.global_count()             return YDT and tonumber(YDT.ydt_get_gl
 function agent.global_name(i)             return YDT and ts(YDT.ydt_get_global_name(i)) end
 function agent.global_type(i)             local r=YDT and tonumber(YDT.ydt_get_global_type(i)) or -1; return r>=0 and r or nil end
 function agent.global_value(i)            return YDT and ts(YDT.ydt_get_global_value(i)) end
-function agent.set_global_value(i,v)      return YDT and YDT.ydt_set_global_value(i,tostring(v))~=0 or false end
+function agent.set_global_value(i,v)      return false end
 function agent.list_globals() local n=agent.global_count(); local l={}
     for i=0,n-1 do l[#l+1]={index=i,name=agent.global_name(i),type=agent.global_type(i),value=agent.global_value(i)} end
     return l

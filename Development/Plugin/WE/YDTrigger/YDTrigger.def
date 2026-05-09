@@ -24,5 +24,4 @@ EXPORTS
     ydt_get_global_name
     ydt_get_global_type
     ydt_get_global_value
-    ydt_set_global_value
     ydt_global_diag

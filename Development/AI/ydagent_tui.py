@@ -105,7 +105,6 @@ _G.YDAGENT_TEST_STUB = {{
     ydt_get_global_name = function(i) local g = glob(i); return g and g.name or nil end,
     ydt_get_global_type = function(i) local g = glob(i); return g and g.type or -1 end,
     ydt_get_global_value = function(i) local g = glob(i); return g and g.value or nil end,
-    ydt_set_global_value = function() return 0 end,
     ydt_global_diag = function() return '{{"stub":true,"cached_count":2}}' end,
     ydt_read_object_file = function() return nil end,
     ydt_write_object_file = function() return 1 end,

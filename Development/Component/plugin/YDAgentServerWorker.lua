@@ -3,8 +3,37 @@ local log = require "log"
 require "bee"
 local socket = require "bee.socket"
 local thread = require "bee.thread"
-local sleep = require "ffi.sleep"
-local uni = require "ffi.unicode"
+local ok_sleep, sleep = pcall(require, "ffi.sleep")
+if not ok_sleep then
+    ffi.cdef[[void __stdcall Sleep(unsigned long dwMilliseconds);]]
+    sleep = function(ms)
+        ffi.C.Sleep(ms or 0)
+    end
+end
+local ok_uni, uni = pcall(require, "ffi.unicode")
+if not ok_uni then
+    uni = {}
+    function uni.u2w(text)
+        text = tostring(text or "")
+        local buf = ffi.new("wchar_t[?]", #text + 1)
+        for i = 1, #text do
+            buf[i - 1] = text:byte(i)
+        end
+        buf[#text] = 0
+        return buf
+    end
+    function uni.w2u(buf)
+        local out = {}
+        for i = 0, 255 do
+            local ch = tonumber(buf[i])
+            if not ch or ch == 0 then
+                break
+            end
+            out[#out + 1] = string.char(ch % 256)
+        end
+        return table.concat(out)
+    end
+end
 
 local field_map = require "YDAgentFieldMap"
 local ai = require "YDAgentAI"
@@ -57,7 +86,6 @@ ffi.cdef[[
     const char* ydt_get_global_name(int index);
     int  ydt_get_global_type(int index);
     const char* ydt_get_global_value(int index);
-    int  ydt_set_global_value(int index, const char* value);
     const char* ydt_global_diag(void);
     const char* ydt_read_object_file(const char* file_path);
     int  ydt_write_object_file(const char* file_path, const char* json_data);
@@ -169,9 +197,63 @@ local function find_save_command_id(hwnd)
     return nil
 end
 
+local function current_map_path_for_save_guard()
+    local root = COMPONENT_ROOT
+    if root == "" then
+        root = "."
+    end
+    local f = io.open(root .. "\\logs\\ydwe.log", "rb")
+    if not f then
+        return nil
+    end
+    local last = nil
+    for line in f:lines() do
+        local open_path = line:match("Open map\t(.+)$")
+        if open_path and open_path ~= "" then
+            last = open_path
+        end
+        local save_path = line:match("Saving%s+(.+)$")
+        if save_path and save_path ~= "" then
+            last = save_path
+        end
+    end
+    f:close()
+    if not last then
+        return nil
+    end
+    last = last:gsub("[%z\001-\031]", "")
+    last = last:gsub("/", "\\")
+    return last:gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function is_lni_marker_file_path(map_path)
+    if type(map_path) ~= "string" or map_path == "" then
+        return false
+    end
+    if not map_path:match("[/\\]%.[Ww]3[xmn]$") then
+        return false
+    end
+    local f = io.open(map_path, "rb")
+    if not f then
+        return false
+    end
+    local buf = f:read(12) or ""
+    f:close()
+    return buf:sub(9, 12) == "W2L\001"
+end
+
 local editor = {}
 
 function editor.save_map()
+    local map_path = current_map_path_for_save_guard()
+    if is_lni_marker_file_path(map_path) then
+        return {
+            ok = true,
+            action = "lni_marker_noop",
+            map_path = map_path,
+            reason = "LNI marker maps are source-backed; GUI save rewrites the LNI source directory.",
+        }
+    end
     local hwnd = find_editor_window()
     if not hwnd or hwnd == 0 then
         return nil, "YDWE editor window not found"
@@ -482,6 +564,77 @@ local function path_join(root, name)
     return root .. "\\" .. name
 end
 
+local function normalize_map_key(path)
+    if type(path) ~= "string" then
+        return nil
+    end
+    path = path:gsub("/", "\\")
+    path = path:gsub("^%s+", ""):gsub("%s+$", "")
+    if path == "" then
+        return nil
+    end
+    return path:lower()
+end
+
+local function pending_globals_path()
+    if COMPONENT_ROOT == nil or COMPONENT_ROOT == "" then
+        return "logs\\ydagent_pending_globals.lua"
+    end
+    return path_join(COMPONENT_ROOT, "logs\\ydagent_pending_globals.lua")
+end
+
+local function load_pending_global_overrides()
+    local chunk = loadfile(pending_globals_path())
+    if not chunk then
+        return {}
+    end
+    local ok, data = pcall(chunk)
+    if not ok or type(data) ~= "table" then
+        return {}
+    end
+    return data
+end
+
+local function sorted_keys(tbl)
+    local keys = {}
+    for key in pairs(tbl or {}) do
+        keys[#keys + 1] = key
+    end
+    table.sort(keys)
+    return keys
+end
+
+local function save_pending_global_overrides(data)
+    local path = pending_globals_path()
+    if next(data or {}) == nil then
+        os.remove(path)
+        return true
+    end
+    local f = io.open(path, "wb")
+    if not f then
+        return nil, "cannot write pending globals: " .. tostring(path)
+    end
+    f:write("return {\n")
+    for _, map_key in ipairs(sorted_keys(data)) do
+        local entry = data[map_key]
+        if type(entry) == "table" and next(entry) ~= nil then
+            f:write("  [", string.format("%q", map_key), "] = {\n")
+            for _, global_name in ipairs(sorted_keys(entry)) do
+                local item = entry[global_name]
+                f:write(
+                    "    [", string.format("%q", global_name), "] = { type_name = ",
+                    string.format("%q", tostring(item.type_name or "")),
+                    ", value = ", string.format("%q", tostring(item.value or "")), " },\n"
+                )
+            end
+            f:write("  },\n")
+        end
+    end
+    f:write("}\n")
+    f:close()
+    return true
+end
+
 local GLOBAL_TYPE_IDS = {
     integer = 1,
     real = 2,
@@ -562,6 +715,10 @@ local function live_global_name(name)
         return nil
     end
     return "udg_" .. normalized
+end
+
+local function native_global_count()
+    return tonumber(YDT.ydt_get_global_count()) or 0
 end
 
 local function load_script_global_types()
@@ -672,6 +829,34 @@ local function read_all_lines(path)
     return lines
 end
 
+local function path_dirname(path)
+    if type(path) ~= "string" then
+        return nil
+    end
+    local dir = path:match("^(.*)[/\\][^/\\]+$")
+    return dir
+end
+
+local function is_lni_map_marker(map_path)
+    if type(map_path) ~= "string" or map_path == "" then
+        return false
+    end
+    local marker = map_path:match("[/\\](%.[Ww]3[xmn])$")
+    if not marker then
+        return false
+    end
+    local dir = path_dirname(map_path)
+    if not dir then
+        return false
+    end
+    local f = io.open(path_join(dir, "trigger\\variable.lml"), "rb")
+    if f then
+        f:close()
+        return true
+    end
+    return false
+end
+
 local function parse_variable_lml(path)
     local lines, err = read_all_lines(path)
     if not lines then
@@ -735,6 +920,19 @@ local function write_variable_lml(path, vars)
 end
 
 local function get_variable_lml_path(map_path)
+    if type(map_path) ~= "string" or map_path == "" then
+        map_path = current_map_path()
+    end
+    if type(map_path) ~= "string" or map_path == "" then
+        return nil, "map path is required"
+    end
+    if is_lni_map_marker(map_path) then
+        local dir = path_dirname(map_path)
+        if not dir then
+            return nil, "cannot resolve lni map directory"
+        end
+        return path_join(dir, "trigger\\variable.lml")
+    end
     local temp_dir, err = resolve_map_temp_dir(map_path)
     if not temp_dir then
         return nil, err
@@ -752,6 +950,23 @@ local function read_variable_file(map_path)
         return nil, parse_err
     end
     return vars, variable_path
+end
+
+local function file_global_defs(map_path)
+    local vars, err = read_variable_file(map_path)
+    if not vars then
+        return nil, err
+    end
+    local defs = {}
+    for _, var in ipairs(vars) do
+        defs[#defs + 1] = {
+            name = live_global_name(var.name),
+            type_name = var.type_name,
+            type_id = GLOBAL_TYPE_IDS[var.type_name],
+            array = tostring((var.options or {}).Array or "0") ~= "0",
+        }
+    end
+    return defs
 end
 
 local function find_variable(vars, name)
@@ -832,6 +1047,28 @@ local function file_set_global(name, type_name, value, map_path)
     local default_key = ensure_default_option(var)
     var.options[default_key] = tostring(value)
     return write_globals_file(map_path, vars)
+end
+
+local function stage_pending_global_override(map_path, name, type_name, value)
+    local map_key = normalize_map_key(map_path)
+    if not map_key then
+        return nil, "map path is required"
+    end
+    local live_name = live_global_name(name) or name
+    if not live_name then
+        return nil, "invalid global name"
+    end
+    local data = load_pending_global_overrides()
+    local entry = data[map_key]
+    if type(entry) ~= "table" then
+        entry = {}
+        data[map_key] = entry
+    end
+    entry[live_name] = {
+        type_name = type_name or "",
+        value = tostring(value),
+    }
+    return save_pending_global_overrides(data)
 end
 
 local function file_create_global(name, type_name, value, map_path)
@@ -984,11 +1221,35 @@ function agent.delete_trigger(idx)
 end
 
 function agent.global_count()
-    return tonumber(YDT.ydt_get_global_count()) or 0
+    local count = native_global_count()
+    if count > 0 then
+        return count
+    end
+    local map_path = current_map_path()
+    if is_lni_map_marker(map_path) then
+        local defs = file_global_defs(map_path)
+        if defs then
+            return #defs
+        end
+    end
+    return 0
 end
 
 function agent.global_name(idx)
-    return to_str(YDT.ydt_get_global_name(idx))
+    local count = native_global_count()
+    if idx >= 0 and idx < count then
+        local name = to_str(YDT.ydt_get_global_name(idx))
+        if name and name ~= "" then
+            return name
+        end
+    end
+    local map_path = current_map_path()
+    if is_lni_map_marker(map_path) then
+        local defs = file_global_defs(map_path)
+        local entry = defs and defs[idx + 1]
+        return entry and entry.name or nil
+    end
+    return nil
 end
 
 function agent.global_type(idx)
@@ -997,17 +1258,39 @@ function agent.global_type(idx)
     if info then
         return info.id
     end
-    local r = YDT.ydt_get_global_type(idx)
-    return r >= 0 and r or nil
+    local map_path = current_map_path()
+    if is_lni_map_marker(map_path) then
+        local defs = file_global_defs(map_path)
+        local entry = defs and defs[idx + 1]
+        if entry and entry.type_id then
+            return entry.type_id
+        end
+    end
+    local count = native_global_count()
+    if idx >= 0 and idx < count then
+        local r = YDT.ydt_get_global_type(idx)
+        return r >= 0 and r or nil
+    end
+    return nil
 end
 
 function agent.global_value(idx)
-    local val = to_str(YDT.ydt_get_global_value(idx))
-    if val and val ~= "" then
-        return val
+    local count = native_global_count()
+    if idx >= 0 and idx < count then
+        local val = to_str(YDT.ydt_get_global_value(idx))
+        if val and val ~= "" then
+            return val
+        end
     end
     
     local name = agent.global_name(idx)
+    local map_path = current_map_path()
+    if name and is_lni_map_marker(map_path) then
+        local file_val = file_global_value(name, map_path)
+        if file_val ~= nil then
+            return file_val
+        end
+    end
     local info = name and load_script_global_types()[name]
     if info and info.array then
         return nil
@@ -1019,8 +1302,8 @@ function agent.global_value(idx)
 end
 
 function agent.set_global_value(idx, value)
-    if YDT.ydt_set_global_value(idx, tostring(value)) ~= 0 then
-        return true
+    if rawget(_G, "YDAGENT_TEST_STUB") then
+        return false
     end
     local name = agent.global_name(idx)
     if not name then
@@ -1031,7 +1314,11 @@ function agent.set_global_value(idx, value)
         return nil, "array global write is not supported"
     end
     local type_name = info and info.name or nil
-    return file_set_global(name, type_name, value)
+    local map_path = current_map_path()
+    if is_lni_map_marker(map_path) then
+        return file_set_global(name, type_name, value, map_path)
+    end
+    return stage_pending_global_override(map_path, name, type_name, value)
 end
 
 function agent.list_globals()

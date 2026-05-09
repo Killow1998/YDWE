@@ -12,7 +12,6 @@ int ydt_get_global_count(void);
 const char* ydt_get_global_name(int index);
 int ydt_get_global_type(int index);
 const char* ydt_get_global_value(int index);
-int ydt_set_global_value(int index, const char* value);
 const char* ydt_global_diag(void);
 }
 
@@ -43,8 +42,6 @@ TEST_CASE("AgentAPI global variables use mock WE container layout", "[agent][glo
 
     REQUIRE(ydt_get_global_type(0) == -1);
     REQUIRE(std::string(ydt_get_global_value(0)) == "");
-    REQUIRE(ydt_set_global_value(0, "123") == 0);
-    REQUIRE(ydt_set_global_value(99, "123") == 0);
 
     agent_api_capture_global_name(0, "udg_MockInt", CC_VARTYPE_integer, "integer", container);
     std::string diag = ydt_global_diag();

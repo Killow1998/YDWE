@@ -4,8 +4,35 @@ local template = require "compiler.template"
 local jasshelper = require "compiler.jasshelper"
 local ev = require 'ev'
 
+local function sanitize_jass_script(path)
+    local text = io.load(path)
+    if not text then
+        return true
+    end
+    local removed = 0
+    if text:sub(1, 3) == "\239\187\191" then
+        text = text:sub(4)
+        removed = removed + 1
+    end
+    text = text:gsub("[\0\1-\8\11\12\14-\31\127]", function()
+        removed = removed + 1
+        return ""
+    end)
+    if removed > 0 then
+        log.warn(("Sanitized %d invalid byte(s) from %s"):format(removed, path:string()))
+        return io.save(path, text)
+    end
+    return true
+end
+
 local function update_script(map_path, input, process_function)
     fs.copy_file(map_path / 'war3map.j', input, true)
+    local ok, err = sanitize_jass_script(input)
+    if not ok then
+        log.error("Sanitize input script failed.")
+        log.error(err)
+        return false
+    end
     local output = process_function(input)
     if not output then
         log.error("Compile failed.")

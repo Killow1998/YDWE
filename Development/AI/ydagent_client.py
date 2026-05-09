@@ -28,13 +28,13 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 27118
 
 
-def rpc_call(host, port, method, params=None):
+def rpc_call(host, port, method, params=None, timeout=10.0):
     """Send JSON-RPC 2.0 request and return result."""
     request = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params or []}
     payload = json.dumps(request)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(10)
+    sock.settimeout(timeout)
     sock.connect((host, port))
     sock.sendall(payload.encode("utf-8"))
 
@@ -102,6 +102,31 @@ def parse_json_arg(value):
         return value
 
 
+def normalize_live_value(value):
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "null"
+    if isinstance(value, str):
+        text = value.strip()
+        if len(text) >= 2 and text[0] == '"' and text[-1] == '"':
+            try:
+                decoded = json.loads(text)
+                if isinstance(decoded, (str, int, float, bool)) or decoded is None:
+                    return normalize_live_value(decoded)
+            except Exception:
+                pass
+        return text
+    return str(value)
+
+
+def is_lni_marker_path(path):
+    if not isinstance(path, str):
+        return False
+    lower = path.lower().replace("/", "\\")
+    return lower.endswith("\\.w3x") or lower.endswith("\\.w3m")
+
+
 def print_smoke(result):
     print("OK" if result.get("ok") else "FAIL")
     for item in result.get("checks", []):
@@ -140,7 +165,7 @@ def main():
             print(f"OK: {result} triggers found")
 
         elif cmd == "save_map":
-            result = rpc_call(host, port, "editor.save_map")
+            result = rpc_call(host, port, "editor.save_map", timeout=60.0)
             pretty(result)
             status = wait_for_server(host, port, timeout=30.0)
             print("status_after_save:")
@@ -169,7 +194,24 @@ def main():
             idx = int(sys.argv[2])
             value = parse_json_arg(sys.argv[3])
             result = rpc_call(host, port, "agent.set_global_value", [idx, value])
-            print(f"OK" if result else "FAIL")
+            if not result:
+                print("FAIL")
+                return
+            print("OK: staged")
+            map_path = rpc_call(host, port, "editor.current_map_path")
+            if is_lni_marker_path(map_path):
+                print("mode: lni_live_file")
+            else:
+                save_result = rpc_call(host, port, "editor.save_map", timeout=60.0)
+                pretty(save_result)
+                wait_for_server(host, port, timeout=30.0)
+            readback = rpc_call(host, port, "agent.global_value", [idx])
+            print("readback:")
+            pretty(readback)
+            if normalize_live_value(readback) == normalize_live_value(value):
+                print("VERIFIED")
+            else:
+                print("MISMATCH")
 
         elif cmd == "create_global":
             name = sys.argv[2]

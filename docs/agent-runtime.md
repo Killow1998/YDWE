@@ -110,7 +110,7 @@ Real GUI verification:
 
 ## Current Limits
 
-- `ydt_set_global_value` remains a safe no-op in native code
+- global value writes do not use a native memory setter
 - array-global writes are not supported
 - direct editor automation must go through `YDWE.exe`, not raw `worldedit.exe`
 - generated logs are not a documentation source of truth

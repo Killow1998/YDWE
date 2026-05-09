@@ -27,7 +27,6 @@ ffi.cdef([[
     const char* ydt_get_global_name(int);
     int ydt_get_global_type(int);
     const char* ydt_get_global_value(int);
-    int ydt_set_global_value(int,const char*);
     const char* ydt_read_object_file(const char*);
     int ydt_write_object_file(const char*,const char*);
 ]])
@@ -208,7 +207,7 @@ local function handle_request(dll)
             end
             result = list
         elseif method == "set_global_value" then
-            result = dll.ydt_set_global_value(req[2], req[3]) ~= 0
+            result = false
         else
             result = {error="unknown method: "..method}
         end

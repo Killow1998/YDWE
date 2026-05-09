@@ -1217,12 +1217,6 @@ const char* __cdecl ydt_get_global_value(int index) {
     return alloc_str(g_globals[index].value);
 }
 
-int __cdecl ydt_set_global_value(int index, const char* value) {
-    using namespace agent_api;
-    if (index < 0 || index >= (int)g_globals.size() || !value) return 0;
-    return 0;
-}
-
 int __cdecl ydt_delete_trigger(int trig_index) {
     using namespace agent_api;
     if (trig_index < 0 || trig_index >= (int)g_triggers.size()) return 0;

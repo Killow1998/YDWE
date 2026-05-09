@@ -24,6 +24,12 @@ The maintained project documentation is consolidated under
 - live trigger enumeration
 - live trigger rename
 - live global enumeration
+- LNI-session live global write + immediate readback
+- normal `.w3x` scalar global write + save/compile + reopen readback
+- LNI temp-script save failures caused by leaked control bytes are sanitized at
+  compile entry
+- Agent `save_map` no-ops on LNI marker maps to avoid rewriting source-backed
+  LNI directories
 - map-level global create / modify / delete
 - object-editor read / write
 - provider configuration UI
@@ -42,7 +48,11 @@ or stub calls:
 ### Current Limitation
 
 - native runtime direct global-value write is still intentionally disabled
-- the safe write path is still file-backed edit -> save/compile -> RPC readback
+- current safe global-write behavior is split by session type:
+  - LNI marker map: file-backed live write + immediate RPC readback
+  - normal `.w3x`: WTG-backed scalar default write during save/compile, verified
+    by reopen readback
+- array-global writes are not supported yet
 
 ## Quick Links
 
