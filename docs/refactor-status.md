@@ -68,6 +68,9 @@ Q:\AppData\ydwe\YDWE\Build\publish\Debug\YDWE.exe Q:\AppData\ydwe\work\compose_d
 - ObjectAPI preserves real object-layout metadata through `field_details`
   (`id/type/level/data/terminator/value`) so ability/upgrade/doodad level fields
   can roundtrip without losing structure
+- `object.write` now supports open-editor `.w3x` sessions by staging modified
+  object files into `logs/ydagent_pending_objects.lua`; the save pipeline copies
+  staged `war3map.w3*` files into the active temp map before packing
 - global parsing reads both `globals` and `InitGlobals`
 - provider configuration UI exists in the editor
 - AI apply flow supports snapshot/rollback
@@ -199,6 +202,13 @@ Clear one map/global pair:
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py clear_pending_globals Q:\path\to\map.w3x compose_count
 ```
 
+Pending object replacements created by `object.write` while the map archive is
+locked can be inspected with:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py pending_objects Q:\path\to\map.w3x
+```
+
 ### 8. Reversible Global Smoke
 
 Run a live-session reversible scalar global check by name:
@@ -237,7 +247,7 @@ editor process. Use `--no-launch` for the current session.
 Broader P1/P2 regression:
 
 ```powershell
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="p1_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear --check-trigger-rename --trigger-index 0 --check-object-field-map item --check-object-field-map unit
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="p1_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear --check-trigger-rename --trigger-index 0 --check-object-field-map item --check-object-field-map unit --check-object-read item --check-object-write item
 ```
 
 ## Verified Results
@@ -276,6 +286,10 @@ Verified in real YDWE sessions:
   `field_details`
 - `object.read unit Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x`
   returned real unit records from `war3map.w3u`, including `field_details`
+- `ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\object_write_regression.w3x --check-object-write item`
+  completed against an open editor session; it mutated item `unam`, staged the
+  object file while the archive was locked, saved through the editor, verified
+  readback, restored the original object JSON, and saved again
 
 Concrete evidence from the 2026-05-09 validation pass:
 
@@ -363,17 +377,17 @@ Verified behavior of the final GUI-only compose demo:
   - YDWE's native GUI save path rewrites the LNI source directory from a temp
     marker map and can remove source-backed files such as `trigger/variable.lml`
   - use `set_global_value` directly for LNI marker globals
-- object-editor archive writeback has a map-lock boundary
+- object-editor archive writeback is staged when the map is open
   - `object.read` is enabled for extracted real `.w3x` archive object files
   - ObjectAPI read/write is unit-tested for legacy fixture data, real `.w3t`,
     real `.w3a`, malformed tail data, and truncated legacy files
   - `object.write` can write an extracted/current object file and can replace a
     map archive object file when StormLib can open the archive in write mode
-  - when the same `.w3x` is open in WorldEdit, StormLib may refuse write-mode
-    archive open; in that case `object.write` returns a clear error before
-    mutating the cache
-  - the remaining hard part is true in-editor object-editor mutation while the
-    map archive is locked by the editor
+  - when the same `.w3x` is open in WorldEdit, `object.write` writes a cache
+    file and registers it in `logs/ydagent_pending_objects.lua`; `save_map`
+    applies it into `w3xTemp` before `map_packer`
+  - if a staged object cache file is deleted before save, the save pipeline
+    fails rather than silently producing a partial map
 
 ## Next-Phase Goals
 
@@ -401,11 +415,10 @@ Verified behavior of the final GUI-only compose demo:
 
 ### P2
 
-- object-editor field metadata lookup and real archive object reads are now part
-  of live validation
-- next object-editor work is a lock-safe in-editor write path for currently open
-  `.w3x` maps, either by locating the editor-owned object temp source or by
-  adding a save-pipeline hook that stages object replacements before packing
+- object-editor field metadata lookup, real archive object reads, and staged
+  open-editor object writes are now part of live validation
+- next object-editor work is broadening write regression beyond `item/unam` to
+  unit, ability level-data, and upgrade fields
 - keep `docs/refactor-status.md` as the only status document
 
 ## Documentation Rule

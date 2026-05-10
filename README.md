@@ -40,8 +40,8 @@ The maintained project documentation is consolidated under
   LNI directories
 - map-level global create / modify / delete
 - object-editor archive read for real `.w3x` object files
-- object-editor file write / archive replace when the target map archive is not
-  locked by an open editor session
+- object-editor write in open `.w3x` sessions through pending object staging and
+  the normal `save_map` packing pipeline
 - object-editor field metadata lookup is covered in live regression
 - provider configuration UI
 - AI apply snapshot / rollback flow
@@ -123,17 +123,16 @@ rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-l
 For the broader P1/P2 live regression:
 
 ```powershell
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="p1_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear --check-trigger-rename --trigger-index 0 --check-object-field-map item --check-object-field-map unit
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="p1_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear --check-trigger-rename --trigger-index 0 --check-object-field-map item --check-object-field-map unit --check-object-read item --check-object-write item
 ```
 
 The reliable regression path is `--no-launch` after the target map is visible in
 the refactor debug editor. Cold self-launch can bring the Agent online before
 native trigger/global capture is ready, so use it only for launch-path checks.
 
-Object archive reads are enabled for real `.w3x` maps. Object archive writeback
-still has a map-lock boundary: if the same map is currently open in WorldEdit,
-StormLib may refuse write-mode archive access. In that case the Agent returns a
-clear error instead of mutating its cache.
+Object archive reads are enabled for real `.w3x` maps. Object writes work while
+the map is open by staging the modified `war3map.w3*` file and applying it in
+the next `save_map` pack cycle.
 
 ## Status Source
 

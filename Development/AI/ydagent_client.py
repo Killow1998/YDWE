@@ -258,6 +258,13 @@ def main():
             result = rpc_call(host, port, "agent.list_pending_globals", [map_path])
             pretty(result)
 
+        elif cmd == "pending_objects":
+            map_path = sys.argv[2] if len(sys.argv) > 2 else "*"
+            if map_path == "--all":
+                map_path = "*"
+            result = rpc_call(host, port, "agent.list_pending_objects", [map_path])
+            pretty(result)
+
         elif cmd == "clear_pending_globals":
             map_path = sys.argv[2] if len(sys.argv) > 2 else "*"
             if map_path == "--all":
@@ -346,7 +353,8 @@ def main():
             print(f"Trigger commands: refresh, save_map, list_triggers, get_eca_tree, dump_all, ")
             print(f"  set_trigger_name, set_trigger_disabled, set_global_value, global_info")
             print(f"  set_global_value_by_name, create_global, delete_global")
-            print(f"  pending_globals [map_path], clear_pending_globals [map_path|--all] [global_name]")
+            print(f"  pending_globals [map_path], pending_objects [map_path]")
+            print(f"  clear_pending_globals [map_path|--all] [global_name]")
             print(f"  add_eca, remove_eca, set_eca_param")
             print(f"Object commands: object_read <type> <map_path>")
             print(f"  object_write <type> <map_path> [json_file]")

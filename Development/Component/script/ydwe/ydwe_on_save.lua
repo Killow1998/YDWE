@@ -18,6 +18,10 @@ local function pending_globals_path()
     return fs.ydwe_path() / 'logs' / 'ydagent_pending_globals.lua'
 end
 
+local function pending_objects_path()
+    return fs.ydwe_path() / 'logs' / 'ydagent_pending_objects.lua'
+end
+
 local function sorted_keys(tbl)
     local keys = {}
     for key in pairs(tbl or {}) do
@@ -62,6 +66,52 @@ local function save_pending_global_overrides(data)
                     string.format("%q", tostring(item.type_name or "")),
                     ", value = ", string.format("%q", tostring(item.value or "")), " },\n"
                 )
+            end
+            f:write("  },\n")
+        end
+    end
+    f:write("}\n")
+    f:close()
+    return true
+end
+
+local function load_pending_object_overrides()
+    local path = pending_objects_path()
+    local chunk = loadfile(path:string())
+    if not chunk then
+        return {}
+    end
+    local ok, data = pcall(chunk)
+    if not ok or type(data) ~= "table" then
+        return {}
+    end
+    return data
+end
+
+local function save_pending_object_overrides(data)
+    local path = pending_objects_path()
+    if next(data or {}) == nil then
+        fs.remove(path)
+        return true
+    end
+    local f = io.open(path:string(), 'wb')
+    if not f then
+        return nil, 'cannot write pending objects'
+    end
+    f:write("return {\n")
+    for _, map_key in ipairs(sorted_keys(data)) do
+        local entry = data[map_key]
+        if type(entry) == "table" and next(entry) ~= nil then
+            f:write("  [", string.format("%q", map_key), "] = {\n")
+            for _, object_file in ipairs(sorted_keys(entry)) do
+                local item = entry[object_file]
+                if type(item) == "table" and item.cache_path then
+                    f:write(
+                        "    [", string.format("%q", object_file), "] = { cache_path = ",
+                        string.format("%q", tostring(item.cache_path)),
+                        ", type_name = ", string.format("%q", tostring(item.type_name or "")), " },\n"
+                    )
+                end
             end
             f:write("  },\n")
         end
@@ -178,6 +228,16 @@ local function clear_pending_global_overrides(source_path)
     end
     data[map_key] = nil
     return save_pending_global_overrides(data)
+end
+
+local function clear_pending_object_overrides(source_path)
+    local data = load_pending_object_overrides()
+    local map_key = normalize_map_key(source_path:string())
+    if not map_key or data[map_key] == nil then
+        return true
+    end
+    data[map_key] = nil
+    return save_pending_object_overrides(data)
 end
 
 local function escape_lua_pattern(text)
@@ -417,6 +477,28 @@ local function apply_pending_global_overrides(source_path, temp_path)
     return nil, 'cannot open variable.lml or war3map.j'
 end
 
+local function apply_pending_object_overrides(source_path, temp_path)
+    local data = load_pending_object_overrides()
+    local map_key = normalize_map_key(source_path:string())
+    local entry = map_key and data[map_key] or nil
+    if type(entry) ~= "table" or next(entry) == nil then
+        return false
+    end
+    for object_file, item in pairs(entry) do
+        if type(item) ~= "table" or type(item.cache_path) ~= "string" or item.cache_path == "" then
+            return nil, "invalid pending object entry: " .. tostring(object_file)
+        end
+        local source = fs.path(item.cache_path)
+        if not fs.exists(source) then
+            return nil, "pending object cache missing: " .. tostring(item.cache_path)
+        end
+        local target = temp_path / object_file
+        fs.copy_file(source, target, true)
+        log.info("Applied pending object file " .. tostring(object_file) .. " for " .. source_path:string())
+    end
+    return map_key
+end
+
 local function backup_map(map_path)
     local ydwe_path = fs.ydwe_path()
     fs.create_directories(ydwe_path / 'backups')
@@ -438,6 +520,11 @@ local function saveW3x(source_path, target_path, temp_path, save_version, is_tes
     local applied_key, clear_after_save, apply_err = apply_pending_global_overrides(source_path, temp_path)
     if apply_err ~= nil then
         log.error('Apply pending globals failed: ' .. tostring(apply_err))
+        return false
+    end
+    local applied_object_key, object_err = apply_pending_object_overrides(source_path, temp_path)
+    if object_err ~= nil then
+        log.error('Apply pending objects failed: ' .. tostring(object_err))
         return false
     end
     local result = compiler:compile(temp_path, global_config, save_version)
@@ -464,6 +551,9 @@ local function saveW3x(source_path, target_path, temp_path, save_version, is_tes
     log.debug("Packer Result " .. tostring(result))
     if result and applied_key and clear_after_save then
         clear_pending_global_overrides(source_path)
+    end
+    if result and applied_object_key then
+        clear_pending_object_overrides(source_path)
     end
     return result
 end

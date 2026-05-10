@@ -479,6 +479,136 @@ def _run_object_read_check(
     print(f"PASS: object_read type={object_type} count={count}")
 
 
+def _decode_object_payload(result: Any, object_type: str) -> dict[str, Any]:
+    if isinstance(result, str):
+        try:
+            result = json.loads(result)
+        except Exception as exc:
+            raise RegressionError(f"object.read({object_type}) returned non-JSON string: {exc}")
+    _assert(isinstance(result, dict), f"object.read({object_type}) returned non-dict payload")
+    return result
+
+
+def _object_records(data: dict[str, Any]) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for key in ("custom", "original"):
+        value = data.get(key)
+        if isinstance(value, list):
+            records.extend(record for record in value if isinstance(record, dict))
+    return records
+
+
+def _set_object_field(record: dict[str, Any], field_id: str, value: str) -> None:
+    fields = record.setdefault("fields", {})
+    _assert(isinstance(fields, dict), "object record fields is not a dict")
+    fields[field_id] = value
+
+    details = record.setdefault("field_details", [])
+    _assert(isinstance(details, list), "object record field_details is not a list")
+    for detail in details:
+        if isinstance(detail, dict) and detail.get("id") == field_id:
+            detail["type"] = 3
+            detail["value"] = value
+            return
+    details.append({
+        "id": field_id,
+        "type": 3,
+        "level": 0,
+        "data": 0,
+        "terminator": 0,
+        "value": value,
+    })
+
+
+def _run_object_write_regression(
+    host: str,
+    port: int,
+    object_type: str,
+    map_path: str,
+    rpc_timeout: float,
+    save_timeout: float,
+) -> None:
+    original = _decode_object_payload(
+        _rpc(host, port, "object.read", [object_type, map_path], timeout=rpc_timeout),
+        object_type,
+    )
+    records = _object_records(original)
+    _assert(records, f"object.write({object_type}) has no records to mutate")
+
+    target_record = None
+    field_id = "unam"
+    original_value = None
+    for record in records:
+        fields = record.get("fields")
+        if isinstance(fields, dict) and isinstance(fields.get(field_id), str):
+            target_record = record
+            original_value = fields[field_id]
+            break
+    _assert(target_record is not None, f"object.write({object_type}) found no string {field_id} field")
+
+    marker = f"{original_value}_YDAGENT_OBJECT_WRITE"
+    mutated = json.loads(json.dumps(original, ensure_ascii=False))
+    mutated_record = None
+    for record in _object_records(mutated):
+        if record.get("id") == target_record.get("id"):
+            mutated_record = record
+            break
+    _assert(mutated_record is not None, "object.write target record disappeared during copy")
+
+    restore_errors: list[str] = []
+    body_error: Exception | None = None
+    try:
+        _set_object_field(mutated_record, field_id, marker)
+        ok = _rpc(
+            host,
+            port,
+            "object.write",
+            [object_type, map_path, json.dumps(mutated, ensure_ascii=False, separators=(",", ":"))],
+            timeout=rpc_timeout,
+        )
+        _assert(ok is True, f"object.write({object_type}) returned {ok!r}")
+        _run_save_map(host, port, save_timeout)
+        time.sleep(2)
+
+        after = _decode_object_payload(
+            _rpc(host, port, "object.read", [object_type, map_path], timeout=rpc_timeout),
+            object_type,
+        )
+        after_record = next((r for r in _object_records(after) if r.get("id") == target_record.get("id")), None)
+        _assert(after_record is not None, "object.write target record missing after write")
+        _assert(
+            after_record.get("fields", {}).get(field_id) == marker,
+            f"object.write({object_type}) readback mismatch",
+        )
+    except Exception as exc:
+        body_error = exc
+    finally:
+        try:
+            ok = _rpc(
+                host,
+                port,
+                "object.write",
+                [object_type, map_path, json.dumps(original, ensure_ascii=False, separators=(",", ":"))],
+                timeout=rpc_timeout,
+            )
+            if ok is not True:
+                restore_errors.append(f"object restore write returned {ok!r}")
+            else:
+                _run_save_map(host, port, save_timeout)
+                time.sleep(2)
+        except Exception as exc:
+            restore_errors.append(f"object restore error: {exc}")
+
+    if restore_errors:
+        if body_error is not None:
+            raise RegressionError(f"{body_error}; {'; '.join(restore_errors)}")
+        raise RegressionError("; ".join(restore_errors))
+    if body_error is not None:
+        raise body_error
+
+    print(f"PASS: object_write_restore type={object_type} field={field_id}")
+
+
 def _run_object_field_map_check(
     host: str,
     port: int,
@@ -816,6 +946,18 @@ def run(args: argparse.Namespace) -> LaunchedSession | None:
                 args.rpc_timeout,
             )
 
+    if args.check_object_write:
+        map_path = _read_current_map_path(args.host, args.port)
+        for object_type in args.check_object_write:
+            _run_object_write_regression(
+                args.host,
+                args.port,
+                object_type,
+                map_path,
+                args.rpc_timeout,
+                args.save_timeout,
+            )
+
     if args.check_object_field_map:
         for object_type in args.check_object_field_map:
             _run_object_field_map_check(
@@ -875,6 +1017,12 @@ def main() -> int:
         action="append",
         metavar="TYPE",
         help="read object data without mutating; repeatable for multiple types",
+    )
+    parser.add_argument(
+        "--check-object-write",
+        action="append",
+        metavar="TYPE",
+        help="mutate one string object field, save, verify, and restore; repeatable",
     )
     parser.add_argument(
         "--check-object-field-map",

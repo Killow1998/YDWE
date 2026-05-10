@@ -588,6 +588,13 @@ local function pending_globals_path()
     return path_join(COMPONENT_ROOT, "logs\\ydagent_pending_globals.lua")
 end
 
+local function pending_objects_path()
+    if COMPONENT_ROOT == nil or COMPONENT_ROOT == "" then
+        return "logs\\ydagent_pending_objects.lua"
+    end
+    return path_join(COMPONENT_ROOT, "logs\\ydagent_pending_objects.lua")
+end
+
 local function load_pending_global_overrides()
     local chunk = loadfile(pending_globals_path())
     if not chunk then
@@ -638,6 +645,77 @@ local function save_pending_global_overrides(data)
     f:write("}\n")
     f:close()
     return true
+end
+
+local function load_pending_object_overrides()
+    local chunk = loadfile(pending_objects_path())
+    if not chunk then
+        return {}
+    end
+    local ok, data = pcall(chunk)
+    if not ok or type(data) ~= "table" then
+        return {}
+    end
+    return data
+end
+
+local function save_pending_object_overrides(data)
+    local path = pending_objects_path()
+    if next(data or {}) == nil then
+        os.remove(path)
+        return true
+    end
+    local f = io.open(path, "wb")
+    if not f then
+        return nil, "cannot write pending objects: " .. tostring(path)
+    end
+    f:write("return {\n")
+    for _, map_key in ipairs(sorted_keys(data)) do
+        local entry = data[map_key]
+        if type(entry) == "table" and next(entry) ~= nil then
+            f:write("  [", string.format("%q", map_key), "] = {\n")
+            for _, object_file in ipairs(sorted_keys(entry)) do
+                local item = entry[object_file]
+                if type(item) == "table" and item.cache_path then
+                    f:write(
+                        "    [", string.format("%q", object_file), "] = { cache_path = ",
+                        string.format("%q", tostring(item.cache_path)),
+                        ", type_name = ", string.format("%q", tostring(item.type_name or "")), " },\n"
+                    )
+                end
+            end
+            f:write("  },\n")
+        end
+    end
+    f:write("}\n")
+    f:close()
+    return true
+end
+
+local function pending_object_overrides_for(map_path)
+    local data = load_pending_object_overrides()
+    if map_path == nil or map_path == "" or map_path == "*" then
+        return data
+    end
+    local map_key = normalize_map_key(map_path)
+    if not map_key then
+        return {}
+    end
+    return data[map_key] or {}
+end
+
+local function register_pending_object_override(map_path, object_file, cache_path, type_name)
+    local map_key = normalize_map_key(map_path)
+    if not map_key then
+        return nil, "map path is required"
+    end
+    local data = load_pending_object_overrides()
+    data[map_key] = data[map_key] or {}
+    data[map_key][object_file] = {
+        cache_path = tostring(cache_path or ""),
+        type_name = tostring(type_name or ""),
+    }
+    return save_pending_object_overrides(data)
 end
 
 local function pending_global_overrides_for(map_path)
@@ -1547,6 +1625,13 @@ function agent.clear_pending_globals(map_path, global_name)
     return clear_pending_global_overrides_for(map_path, global_name)
 end
 
+function agent.list_pending_objects(map_path)
+    if map_path == nil or map_path == "" then
+        map_path = "*"
+    end
+    return pending_object_overrides_for(map_path)
+end
+
 local function read_eca_list(idx, eca_type)
     local count = agent.eca_count(idx, eca_type) or 0
     local list = {}
@@ -1982,7 +2067,14 @@ function object.write(type_name, map_path, json_data)
     end
     local map = stormlib.open(fs.path(map_path), false)
     if not map then
-        return nil, "cannot open map archive for object writeback: " .. tostring(map_path)
+        if YDT.ydt_write_object_file(object_path, json_data) == 0 then
+            return false
+        end
+        local pending_ok, pending_err = register_pending_object_override(map_path, object_file, object_path, type_name)
+        if not pending_ok then
+            return nil, pending_err
+        end
+        return true
     end
     if YDT.ydt_write_object_file(object_path, json_data) == 0 then
         map:close()
