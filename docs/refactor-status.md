@@ -482,6 +482,10 @@ Verified behavior of the final GUI-only compose demo:
   requires v143. Forcing `PlatformToolset=v120` also fails because the bundled
   Catch2 headers use newer C++ syntax, so native C++ test changes must be built
   on a machine with the v143 toolset
+- forcing `YDTrigger.vcxproj` to `PlatformToolset=v120` also fails before the
+  DLL build reaches YDTrigger sources, because `bee.lua` dependency sources use
+  C inline syntax unsupported by that toolchain; the native ECA fix needs a v143
+  rebuild before live GUI verification can pass
 - generated logs and scratch files must be cleaned after testing
 - LNI marker-map temp scripts now sanitize control bytes before Wave compile
   - this specifically masks the bad `W2L\x01` marker-name leak seen in some
