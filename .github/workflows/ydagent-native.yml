@@ -30,6 +30,11 @@ jobs:
         run: |
           python Development\AI\ydagent_build_preflight.py --build-ydtrigger --build-tests
 
+      - name: Native unit tests
+        shell: pwsh
+        run: |
+          Build\bin\Debug\test\YDWE_Test.exe --reporter console --success
+
       - name: Agent stub loopback
         shell: pwsh
         run: |

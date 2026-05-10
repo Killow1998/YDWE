@@ -319,7 +319,7 @@ function M.schema()
         },
         eca_types = ECA_TYPES,
         object_types = OBJECT_TYPES,
-        safety = "Return operations only. Do not apply changes directly. High-risk operations require user review.",
+        safety = "Return operations only. Do not apply changes directly. High-risk operations require user review. remove_eca is non-rollback-safe and requires allow_non_recoverable=true when applying.",
     }
 end
 

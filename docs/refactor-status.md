@@ -166,6 +166,10 @@ Verified working:
   the native source now exposes `ydt_get_eca_active`, rollback restores the
   captured active value, and the stub verifies active returns to its original
   state after a later operation fails
+- `remove_eca` is explicitly treated as non-rollback-safe in `ai.apply_plan`.
+  Default apply rejects it before mutation unless `allow_non_recoverable=true`
+  is passed, because the current native layer cannot safely restore the removed
+  GUI node after a later operation fails.
 - `ydagent_live_regression.py --check-trigger-structure` exists for real GUI
   sessions. It should be enabled after rebuilding `YDTrigger.dll` with the
   event/condition-safe `ydt_add_eca` fix. The live check covers add ECA,
@@ -422,6 +426,9 @@ Verified in real YDWE sessions:
 - `ydagent_tui.py stub --port 27119` completed after adding ECA active getter
   and active-state rollback coverage; it kept the stub Agent RPC baseline at
   59/59 passing
+- `ydagent_tui.py stub --port 27119` completed after adding the
+  non-rollback-safe `remove_eca` apply rejection check; the stub verifies the
+  action ECA count is unchanged after rejection
 - `ydagent_live_regression.py --internal-usable` now includes live
   `object.types` canonical mapping verification for all exposed object-editor
   types before map-specific object read/write checks
@@ -436,7 +443,8 @@ Verified in real YDWE sessions:
   and fails because the v143 toolset is not installed.
 - `ydagent-native.yml` is available as a remote native gate for environments
   where VS2022/v143 is present. It verifies `YDTrigger.vcxproj`,
-  `YDWE_Test.vcxproj`, and the `ydagent_tui.py` stub loopback.
+  `YDWE_Test.vcxproj`, executes `YDWE_Test.exe`, and runs the `ydagent_tui.py`
+  stub loopback.
 - `test_object_api.cpp` now contains real-layout roundtrip fixtures for every
   object-editor file type (`w3u`, `w3t`, `w3b`, `w3d`, `w3a`, `w3h`, `w3q`);
   rerun `YDWE_Test` in an environment with MSBuild available
@@ -582,6 +590,9 @@ Verified behavior of the final GUI-only compose demo:
   add, function edit, active-state edit, parameter edit, remove,
   add-then-fail rollback, and active-state rollback, but real GUI coverage is
   blocked until `YDTrigger.dll` is rebuilt with the v143 toolset
+- `remove_eca` rollback is intentionally not implemented yet; default
+  `ai.apply_plan` refuses it as non-rollback-safe unless the caller explicitly
+  opts into `allow_non_recoverable=true`
 - fresh-session verification is still limited by cold native trigger/global
   capture; the reliable automated path remains `--no-launch` after map load
 - keep GUI-trigger-first test cases as the primary proof path

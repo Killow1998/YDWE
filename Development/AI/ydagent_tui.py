@@ -410,6 +410,37 @@ def run_rpc_suite(host: str, port: int, restore: bool, tui: Tui) -> None:
     )
     require(active_after_rollback is True, f"action active state was not restored: {active_after_rollback!r}")
 
+    remove_eca_reject = expect(
+        "ai.apply_plan rejects non-rollback-safe remove_eca",
+        lambda: rpc_call(
+            host,
+            port,
+            "ai.apply_plan",
+            [
+                {
+                    "operations": [
+                        {"op": "remove_eca", "trigger_index": 0, "eca_type": 2, "eca_index": 0},
+                        {"op": "set_trigger_name", "trigger_index": 999, "name": "MissingTrigger"},
+                    ]
+                },
+                {"dry_run": False, "confirm": True},
+            ],
+        ),
+        tui,
+    )
+    require(isinstance(remove_eca_reject, dict), "remove_eca reject result is not an object")
+    require(remove_eca_reject.get("ok") is False, f"remove_eca apply should fail: {remove_eca_reject!r}")
+    require(remove_eca_reject.get("error") == "operation is not rollback-safe", f"unexpected remove_eca reject: {remove_eca_reject!r}")
+    non_recoverable = remove_eca_reject.get("non_recoverable")
+    require(isinstance(non_recoverable, dict), f"non_recoverable detail missing: {remove_eca_reject!r}")
+    require(non_recoverable.get("op") == "remove_eca", f"unexpected non_recoverable op: {non_recoverable!r}")
+    remove_reject_count = expect(
+        "agent.eca_count action after remove_eca reject",
+        lambda: rpc_call(host, port, "agent.eca_count", [0, 2]),
+        tui,
+    )
+    require(remove_reject_count == 1, f"remove_eca reject mutated action count: {remove_reject_count!r}")
+
     if globals_:
         global_write = expect("agent.set_global_value rejects unsafe write", lambda: rpc_call(host, port, "agent.set_global_value", [0, "99"]), tui)
         require(global_write is False, f"global write should be false, got {global_write!r}")

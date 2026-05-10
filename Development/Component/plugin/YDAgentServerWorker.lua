@@ -2430,6 +2430,13 @@ local function apply_operation(op, options)
     return false, "unsupported operation: " .. tostring(op.op)
 end
 
+local function operation_is_recoverable(op)
+    if op.op == "remove_eca" then
+        return false
+    end
+    return true
+end
+
 local function apply_plan(plan, options)
     options = options or {}
     local source_plan = type(plan) == "table" and plan.plan ~= nil and plan.plan or plan
@@ -2444,6 +2451,20 @@ local function apply_plan(plan, options)
     if not validation.ok then
         result.error = "plan validation failed"
         return result
+    end
+
+    if result.dry_run ~= true and options.allow_non_recoverable ~= true then
+        for index, op in ipairs(validation.operations) do
+            if not operation_is_recoverable(op) then
+                result.error = "operation is not rollback-safe"
+                result.non_recoverable = {
+                    index = index,
+                    op = op.op,
+                    reason = "remove_eca cannot restore the removed node after a later failure",
+                }
+                return result
+            end
+        end
     end
 
     if result.dry_run then
