@@ -13,7 +13,12 @@ import datetime as dt
 import time
 from typing import Any
 
-from ydagent_client import rpc_call
+from ydagent_client import (
+    is_lni_marker_path,
+    normalize_live_value,
+    parse_json_arg,
+    rpc_call,
+)
 
 
 class SmokeError(RuntimeError):
@@ -96,6 +101,85 @@ def _run_restore_cycle(
     }
 
 
+def _run_global_restore_cycle(
+    host: str,
+    port: int,
+    global_name: str,
+    global_value: Any,
+) -> dict[str, Any]:
+    original = _rpc(host, port, "agent.global_info", [global_name])
+    _assert(isinstance(original, dict), "global_info returned non-dict")
+    _assert(isinstance(original.get("index"), int), "global_info missing integer index")
+
+    original_value = original.get("value")
+    if original.get("array") is True:
+        raise SmokeError("refusing to mutate array global in smoke")
+
+    map_path = _rpc(host, port, "editor.current_map_path")
+    global_touched = False
+    body_error: Exception | None = None
+    restore_errors: list[str] = []
+
+    try:
+        write_ok = _rpc(
+            host, port, "agent.set_global_value_by_name", [global_name, global_value]
+        )
+        _assert(write_ok is True, "global restore write returned False")
+        global_touched = True
+
+        if not is_lni_marker_path(map_path):
+            save_result = _rpc(host, port, "editor.save_map", [])
+            _assert(isinstance(save_result, dict), f"editor.save_map returned {save_result!r}")
+            wait_for_server(host, port, 30.0, 0.5)
+
+        after_write = _rpc(host, port, "agent.global_value", [original["index"]])
+        _assert(
+            normalize_live_value(after_write) == normalize_live_value(global_value),
+            f"global readback mismatch: expected {global_value!r}, got {after_write!r}",
+        )
+    except Exception as exc:
+        body_error = exc
+    finally:
+        if global_touched:
+            try:
+                restore_ok = _rpc(
+                    host, port, "agent.set_global_value_by_name", [global_name, original_value]
+                )
+                if restore_ok is not True:
+                    restore_errors.append("global restore write returned False")
+                else:
+                    if not is_lni_marker_path(map_path):
+                        save_result = _rpc(host, port, "editor.save_map", [])
+                        if not isinstance(save_result, dict):
+                            restore_errors.append(f"editor.save_map returned {save_result!r}")
+                        else:
+                            wait_for_server(host, port, 30.0, 0.5)
+
+                    if not restore_errors:
+                        after_restore = _rpc(host, port, "agent.global_value", [original["index"]])
+                        if normalize_live_value(after_restore) != normalize_live_value(original_value):
+                            restore_errors.append(
+                                "global restore verification mismatch: "
+                                f"expected {original_value!r}, got {after_restore!r}"
+                            )
+            except Exception as exc:
+                restore_errors.append(f"global restore error: {exc}")
+
+    if restore_errors:
+        if body_error is not None:
+            raise SmokeError(f"{body_error}; {'; '.join(restore_errors)}")
+        raise SmokeError("; ".join(restore_errors))
+    if body_error is not None:
+        raise body_error
+
+    return {
+        "global_name": global_name,
+        "index": original["index"],
+        "mutated_value": global_value,
+        "restore_value": original_value,
+    }
+
+
 def run(args: argparse.Namespace) -> dict[str, Any]:
     result: dict[str, Any] = {}
 
@@ -126,6 +210,17 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             args.port,
             args.trigger_index,
         )
+    if args.restore_global:
+        if not args.global_name:
+            raise SmokeError("--restore-global requires --global-name")
+        if args.global_value is None:
+            raise SmokeError("--restore-global requires --global-value")
+        result["global_restore_cycle"] = _run_global_restore_cycle(
+            args.host,
+            args.port,
+            args.global_name,
+            parse_json_arg(args.global_value),
+        )
 
     return result
 
@@ -141,6 +236,16 @@ def main() -> int:
         action="store_true",
         help="mutate one trigger name, verify, and restore the original value",
     )
+    parser.add_argument(
+        "--restore-global",
+        action="store_true",
+        help="mutate one global by name, verify, and restore the original value",
+    )
+    parser.add_argument("--global-name", help="global name for --restore-global")
+    parser.add_argument(
+        "--global-value",
+        help="new global value for --restore-global (json-typed)",
+    )
     parser.add_argument("--trigger-index", type=int, default=0, help="trigger index for --restore (default: 0)")
     args = parser.parse_args()
 
@@ -152,6 +257,12 @@ def main() -> int:
             print(
                 "PASS: restore cycle "
                 f"(trigger#{cycle['trigger_index']})"
+            )
+        if args.restore_global:
+            cycle = report["global_restore_cycle"]
+            print(
+                "PASS: global restore cycle "
+                f"({cycle['global_name']}@{cycle['index']})"
             )
         return 0
     except Exception as exc:

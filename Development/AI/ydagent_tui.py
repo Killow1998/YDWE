@@ -190,6 +190,21 @@ def run_rpc_suite(host: str, port: int, restore: bool, tui: Tui) -> None:
         global_write = expect("agent.set_global_value rejects unsafe write", lambda: rpc_call(host, port, "agent.set_global_value", [0, "99"]), tui)
         require(global_write is False, f"global write should be false, got {global_write!r}")
 
+        global_index = expect("agent.global_index by short name", lambda: rpc_call(host, port, "agent.global_index", ["TuiInt"]), tui)
+        require(global_index == 0, f"global index mismatch: {global_index!r}")
+
+        global_info = expect("agent.global_info resolves udg alias", lambda: rpc_call(host, port, "agent.global_info", ["udg_TuiString"]), tui)
+        require(isinstance(global_info, dict), "global info is not an object")
+        require(global_info.get("index") == 1, f"unexpected global index: {global_info.get('index')!r}")
+        require(global_info.get("name") == "udg_TuiString", f"unexpected global name: {global_info.get('name')!r}")
+
+        global_by_name = expect(
+            "agent.set_global_value_by_name rejects unsafe write",
+            lambda: rpc_call(host, port, "agent.set_global_value_by_name", ["TuiInt", "99"]),
+            tui,
+        )
+        require(global_by_name is False, f"global write by name should be false, got {global_by_name!r}")
+
     if restore:
         require(len(triggers) > 0, "restore requires at least one trigger")
         original = rpc_call(host, port, "agent.trigger_name", [0])

@@ -1236,6 +1236,33 @@ local OBJ_FILES = {
 }
 
 local agent = {}
+
+local function build_global_entry(name)
+    local idx, err = agent.global_index(name)
+    if not idx then
+        return nil, err
+    end
+    local resolved_name = agent.global_name(idx)
+    local info = resolved_name and load_script_global_types()[resolved_name]
+    local entry = {
+        index = idx,
+        name = resolved_name,
+    }
+    if info ~= nil then
+        entry.type = info.id
+        entry.type_name = info.name
+        entry.array = info.array == true
+    else
+        entry.type = agent.global_type(idx)
+    end
+    if not entry.array then
+        entry.value = agent.global_value(idx)
+    else
+        entry.value = nil
+    end
+    return entry
+end
+
 agent.EVENT = 0
 agent.CONDITION = 1
 agent.ACTION = 2
@@ -1347,6 +1374,29 @@ function agent.global_name(idx)
     return nil
 end
 
+function agent.global_index(name)
+    local normalized = normalize_global_name(name)
+    if not normalized then
+        return nil, "invalid global name: " .. tostring(name)
+    end
+    local count = agent.global_count()
+    for i = 0, count - 1 do
+        local current_name = agent.global_name(i)
+        if normalize_global_name(current_name) == normalized then
+            return i
+        end
+    end
+    return nil, "global not found: " .. tostring(name)
+end
+
+function agent.global_entry(name)
+    return build_global_entry(name)
+end
+
+function agent.global_info(name)
+    return build_global_entry(name)
+end
+
 function agent.global_type(idx)
     local name = agent.global_name(idx)
     local info = name and load_script_global_types()[name]
@@ -1414,6 +1464,17 @@ function agent.set_global_value(idx, value)
         return file_set_global(name, type_name, value, map_path)
     end
     return stage_pending_global_override(map_path, name, type_name, value)
+end
+
+function agent.set_global_value_by_name(name, value)
+    local entry, err = agent.global_entry(name)
+    if not entry then
+        return nil, err
+    end
+    if entry.array == true then
+        return nil, "array global write is not supported"
+    end
+    return agent.set_global_value(entry.index, value)
 end
 
 function agent.list_globals()

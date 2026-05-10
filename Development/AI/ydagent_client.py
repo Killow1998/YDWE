@@ -17,6 +17,8 @@ Example:
     python ydagent_client.py clear_pending_globals --all
     python ydagent_client.py create_global compose_flag integer 1
     python ydagent_client.py delete_global compose_flag
+    python ydagent_client.py global_info udg_compose_count
+    python ydagent_client.py set_global_value_by_name udg_compose_count 42
     python ydagent_client.py add_eca 0 2   # add action to trigger 0
     python ydagent_client.py rpc ai.status
 """
@@ -215,6 +217,40 @@ def main():
             else:
                 print("MISMATCH")
 
+        elif cmd == "global_info":
+            name = sys.argv[2]
+            result = rpc_call(host, port, "agent.global_info", [name])
+            pretty(result)
+
+        elif cmd == "set_global_value_by_name":
+            name = sys.argv[2]
+            value = parse_json_arg(sys.argv[3])
+            current = rpc_call(host, port, "agent.global_info", [name])
+            if not isinstance(current, dict) or not isinstance(current.get("index"), int):
+                print("FAIL")
+                print(f"invalid global_info response: {current}")
+                return
+            index = current["index"]
+            result = rpc_call(host, port, "agent.set_global_value_by_name", [name, value])
+            if not result:
+                print("FAIL")
+                return
+            print("OK: staged")
+            map_path = rpc_call(host, port, "editor.current_map_path")
+            if is_lni_marker_path(map_path):
+                print("mode: lni_live_file")
+            else:
+                save_result = rpc_call(host, port, "editor.save_map", timeout=60.0)
+                pretty(save_result)
+                wait_for_server(host, port, timeout=30.0)
+            readback = rpc_call(host, port, "agent.global_value", [index])
+            print("readback:")
+            pretty(readback)
+            if normalize_live_value(readback) == normalize_live_value(value):
+                print("VERIFIED")
+            else:
+                print("MISMATCH")
+
         elif cmd == "pending_globals":
             map_path = sys.argv[2] if len(sys.argv) > 2 else "*"
             if map_path == "--all":
@@ -308,7 +344,8 @@ def main():
             print(f"Unknown command: {cmd}")
             print(f"Diagnostic commands: status, smoke, rpc <method> [json_params...]")
             print(f"Trigger commands: refresh, save_map, list_triggers, get_eca_tree, dump_all, ")
-            print(f"  set_trigger_name, set_trigger_disabled, set_global_value, create_global, delete_global")
+            print(f"  set_trigger_name, set_trigger_disabled, set_global_value, global_info")
+            print(f"  set_global_value_by_name, create_global, delete_global")
             print(f"  pending_globals [map_path], clear_pending_globals [map_path|--all] [global_name]")
             print(f"  add_eca, remove_eca, set_eca_param")
             print(f"Object commands: object_read <type> <map_path>")

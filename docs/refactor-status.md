@@ -1,6 +1,6 @@
 # YDWE Refactor Status
 
-Last updated: 2026-05-09
+Last updated: 2026-05-10
 
 This is the single source of truth for the current `ydwe-refactor` state.
 Do not create new status, summary, handoff, or report markdown files elsewhere
@@ -49,6 +49,7 @@ path is `YDWE.exe -> worldeditydwe.exe`.
   marker sessions
 - `ydagent_client.py pending_globals` and `clear_pending_globals` are available
   for maintaining staged normal `.w3x` global overrides
+- name-based global lookup/write is available through Agent RPC and CLI
 - global parsing reads both `globals` and `InitGlobals`
 - provider configuration UI exists in the editor
 - AI apply flow supports snapshot/rollback
@@ -67,6 +68,8 @@ Verified working:
   source, save/compile, reopen, and read back stable values
 - global default writes validate and normalize scalar input before staging:
   integer, real, boolean, and string
+- smoke harness can perform reversible scalar global validation by name in the
+  current live session
 - read / write object-editor fields
 - save / compile from CLI through the live editor session
 
@@ -121,6 +124,12 @@ List globals:
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py rpc agent.list_globals
 ```
 
+Get one global by name:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py global_info udg_compose_count
+```
+
 ### 4. Populate Live Session Data
 
 Cold sessions may start with empty trigger/global caches. Use:
@@ -170,6 +179,18 @@ Clear one map/global pair:
 ```powershell
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py clear_pending_globals Q:\path\to\map.w3x compose_count
 ```
+
+### 8. Reversible Global Smoke
+
+Run a live-session reversible scalar global check by name:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_smoke.py --restore-global --global-name udg_compose_count --global-value 17
+```
+
+This mutates one scalar global, verifies readback, then restores the original
+value in the same session. Normal `.w3x` sessions auto-save between write and
+verify; LNI marker sessions use the live file-backed path.
 
 ## Verified Results
 

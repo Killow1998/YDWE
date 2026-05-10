@@ -26,6 +26,7 @@ The maintained project documentation is consolidated under
 - live global enumeration
 - staged global override inspection and clearing for normal `.w3x` sessions
 - scalar global-value validation for integer / real / boolean / string defaults
+- name-based global lookup/write through Agent RPC and CLI
 - LNI-session live global write + immediate readback
 - normal `.w3x` scalar global write + save/compile + reopen readback
 - LNI temp-script save failures caused by leaked control bytes are sanitized at
@@ -88,6 +89,7 @@ After opening a map in `YDWE.exe`:
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py save_map
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py rpc agent.list_triggers
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py rpc agent.list_globals
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py global_info udg_compose_count
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py pending_globals
 ```
 
