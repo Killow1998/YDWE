@@ -8,13 +8,13 @@ import csv
 import io
 import json
 import shutil
+import struct
 import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ydagent_fetch_native_artifact import _verify_ydtrigger
 from ydagent_client import (
     is_lni_marker_path,
     normalize_live_value,
@@ -60,10 +60,83 @@ _OBJECT_TYPE_FILES = {
     "buff": "war3map.w3h",
     "upgrade": "war3map.w3q",
 }
+_REQUIRED_YDTRIGGER_EXPORTS = {
+    "ydt_get_eca_active",
+    "ydt_add_eca",
+    "ydt_remove_eca",
+    "ydt_read_object_file",
+    "ydt_write_object_file",
+}
 
 
 def _runtime_ydtrigger_path(ydwe_exe: Path) -> Path:
     return ydwe_exe.resolve().parent / "plugin" / "YDTrigger.dll"
+
+
+def _read_c_string(data: bytes, offset: int) -> str:
+    end = data.find(b"\0", offset)
+    if end < 0:
+        end = len(data)
+    return data[offset:end].decode("ascii", errors="replace")
+
+
+def _read_pe_exports(dll_path: Path) -> set[str]:
+    data = dll_path.read_bytes()
+    if len(data) < 0x40 or data[:2] != b"MZ":
+        raise RegressionError(f"not a PE file: {dll_path}")
+    pe_offset = struct.unpack_from("<I", data, 0x3C)[0]
+    if data[pe_offset:pe_offset + 4] != b"PE\0\0":
+        raise RegressionError(f"invalid PE signature: {dll_path}")
+
+    coff = pe_offset + 4
+    section_count = struct.unpack_from("<H", data, coff + 2)[0]
+    optional_size = struct.unpack_from("<H", data, coff + 16)[0]
+    optional = coff + 20
+    magic = struct.unpack_from("<H", data, optional)[0]
+    if magic == 0x10B:
+        data_dir = optional + 96
+    elif magic == 0x20B:
+        data_dir = optional + 112
+    else:
+        raise RegressionError(f"unsupported PE optional header magic: 0x{magic:x}")
+
+    export_rva, _export_size = struct.unpack_from("<II", data, data_dir)
+    if export_rva == 0:
+        return set()
+
+    sections: list[tuple[int, int, int, int]] = []
+    section_offset = optional + optional_size
+    for index in range(section_count):
+        current = section_offset + index * 40
+        virtual_size, virtual_address, raw_size, raw_pointer = struct.unpack_from("<IIII", data, current + 8)
+        sections.append((virtual_address, max(virtual_size, raw_size), raw_pointer, raw_size))
+
+    def rva_to_offset(rva: int) -> int:
+        for virtual_address, virtual_size, raw_pointer, raw_size in sections:
+            if virtual_address <= rva < virtual_address + virtual_size:
+                offset = raw_pointer + (rva - virtual_address)
+                if offset >= raw_pointer + raw_size and raw_size != 0:
+                    raise RegressionError(f"RVA points outside raw section: 0x{rva:x}")
+                return offset
+        raise RegressionError(f"RVA not found in PE sections: 0x{rva:x}")
+
+    export_offset = rva_to_offset(export_rva)
+    name_count = struct.unpack_from("<I", data, export_offset + 24)[0]
+    names_rva = struct.unpack_from("<I", data, export_offset + 32)[0]
+    names_offset = rva_to_offset(names_rva)
+    exports: set[str] = set()
+    for index in range(name_count):
+        name_rva = struct.unpack_from("<I", data, names_offset + index * 4)[0]
+        exports.add(_read_c_string(data, rva_to_offset(name_rva)))
+    return exports
+
+
+def _verify_ydtrigger(dll_path: Path) -> None:
+    exports = _read_pe_exports(dll_path)
+    missing = sorted(_REQUIRED_YDTRIGGER_EXPORTS - exports)
+    if missing:
+        raise RegressionError(f"YDTrigger.dll missing required exports: {', '.join(missing)}")
+    print(f"PASS: runtime_ydtrigger_exports path={dll_path} exports={len(exports)}")
 
 
 def _assert(cond: bool, message: str) -> None:

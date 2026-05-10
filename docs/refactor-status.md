@@ -29,9 +29,6 @@ rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_build_preflight.py --buil
 On the current machine this preflight finds only MSBuild 12.0 and fails with
 `v143 toolset not found`; native source changes are therefore committed but not
 rebuilt into the local `Build/publish/Debug` runtime yet.
-- `.github/workflows/ydagent-native.yml` runs the same preflight, focused native
-  build, Python syntax checks, and Agent stub loopback on GitHub
-  `windows-2022`, which has the correct VS2022/v143 toolchain available.
 
 ### Runtime Baseline
 
@@ -212,41 +209,6 @@ MSBuild YDWE.sln /t:Build /p:Configuration=Debug /p:Platform=Win32
 
 If the preflight fails, install Visual Studio 2022 Build Tools with the C++
 workload before rerunning native build/live trigger-structure verification.
-
-### 1b. Install Remote Native Artifact
-
-When the local machine does not have v143, use the successful GitHub Actions
-artifact instead. Token-based download and install:
-
-```powershell
-$env:GH_TOKEN="..."
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_fetch_native_artifact.py --install
-```
-
-Browser download and install:
-
-1. open the latest successful `YDWE Agent Native Checks` run
-2. download the `ydagent-native-debug` artifact zip
-3. install it:
-
-```powershell
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_fetch_native_artifact.py --zip Q:\path\to\ydagent-native-debug.zip --install
-```
-
-The installer backs up the existing
-`Build/publish/Debug/plugin/YDTrigger.dll` before replacing it.
-
-Check the currently installed Debug DLL:
-
-```powershell
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_fetch_native_artifact.py --verify-runtime
-```
-
-Print the latest successful run and artifact metadata:
-
-```powershell
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_fetch_native_artifact.py --info
-```
 
 ### 2. Launch
 
@@ -487,24 +449,6 @@ Verified in real YDWE sessions:
 - `ydagent_build_preflight.py` now makes the native build prerequisite explicit.
   On this machine it reports only `C:\Program Files (x86)\MSBuild\12.0\Bin\MSBuild.exe`
   and fails because the v143 toolset is not installed.
-- `ydagent-native.yml` is available as a remote native gate for environments
-  where VS2022/v143 is present. It verifies `YDTrigger.vcxproj`,
-  `YDWE_Test.vcxproj`, and executes `YDWE_Test.exe`. The stub loopback runs in
-  CI only when the runtime `Development/Component/bin/lua.exe` exists; the
-  focused native gate does not produce that runtime binary by itself.
-- The same workflow uploads `ydagent-native-debug` with the rebuilt
-  `YDTrigger.dll/.pdb` and `YDWE_Test.exe/.pdb`, so a machine without local v143
-  can still fetch the validated native DLL for GUI live regression.
-- `ydagent_fetch_native_artifact.py` can download the latest successful
-  `ydagent-native-debug` artifact when `GH_TOKEN` or `GITHUB_TOKEN` is set, and
-  can install the rebuilt `YDTrigger.dll` into the local Debug runtime with a
-  timestamped backup of the previous DLL. It also accepts `--zip` for an
-  already downloaded Actions artifact, so local installation does not require an
-  API token when the zip is obtained from the browser. The installer verifies
-  required Agent native exports before copying, and `--verify-runtime` checks
-  whether the current Debug runtime DLL already contains those exports.
-  `--info` prints the latest successful run and artifact metadata without
-  downloading the zip.
 - `test_object_api.cpp` now contains real-layout roundtrip fixtures for every
   object-editor file type (`w3u`, `w3t`, `w3b`, `w3d`, `w3a`, `w3h`, `w3q`);
   rerun `YDWE_Test` in an environment with MSBuild available

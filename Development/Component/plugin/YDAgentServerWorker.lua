@@ -1433,10 +1433,8 @@ function agent.eca_gui_id(idx, eca_type, eca_i)
 end
 
 function agent.eca_active(idx, eca_type, eca_i)
-    local ok, r = pcall(function()
-        return YDT.ydt_get_eca_active(idx, eca_type, eca_i)
-    end)
-    if ok and r and r >= 0 then
+    local r = YDT.ydt_get_eca_active(idx, eca_type, eca_i)
+    if r >= 0 then
         return r ~= 0
     end
     return nil
