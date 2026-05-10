@@ -451,8 +451,9 @@ Verified in real YDWE sessions:
   and fails because the v143 toolset is not installed.
 - `ydagent-native.yml` is available as a remote native gate for environments
   where VS2022/v143 is present. It verifies `YDTrigger.vcxproj`,
-  `YDWE_Test.vcxproj`, executes `YDWE_Test.exe`, and runs the `ydagent_tui.py`
-  stub loopback.
+  `YDWE_Test.vcxproj`, and executes `YDWE_Test.exe`. The stub loopback runs in
+  CI only when the runtime `Development/Component/bin/lua.exe` exists; the
+  focused native gate does not produce that runtime binary by itself.
 - `test_object_api.cpp` now contains real-layout roundtrip fixtures for every
   object-editor file type (`w3u`, `w3t`, `w3b`, `w3d`, `w3a`, `w3h`, `w3q`);
   rerun `YDWE_Test` in an environment with MSBuild available

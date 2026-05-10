@@ -38,4 +38,8 @@ jobs:
       - name: Agent stub loopback
         shell: pwsh
         run: |
-          python Development\AI\ydagent_tui.py stub --port 27119
+          if (Test-Path Development\Component\bin\lua.exe) {
+            python Development\AI\ydagent_tui.py stub --port 27119
+          } else {
+            Write-Host "SKIP: Development\Component\bin\lua.exe is not produced by this focused native gate"
+          }
