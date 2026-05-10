@@ -27,7 +27,8 @@ Verified working:
 - rename real triggers
 - read real globals
 - create / modify / delete globals at map-file level
-- object editor read / write
+- object editor archive read / staged write for real `.w3x` maps
+- pending object replacement inspection and cleanup
 - trigger `save_map` from CLI through `editor.save_map`
 - configure AI providers in the editor UI
 - execute AI apply operations with snapshot/rollback support
@@ -81,6 +82,20 @@ rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py create_global c
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py delete_global compose_flag
 ```
 
+Read / write object data:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py object_read item Q:\path\to\map.w3x
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py object_write item Q:\path\to\map.w3x item.json --save
+```
+
+Inspect or clear staged object replacements:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py pending_objects Q:\path\to\map.w3x
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py clear_pending_objects --all
+```
+
 ## AI Provider Modes
 
 The current UI/provider layer supports both API-style providers and CLI coding
@@ -103,14 +118,24 @@ rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_tui.py stub --restore
 
 Real GUI verification:
 
-1. launch `Build\publish\Debug\YDWE.exe`
-2. load a map
-3. run `save_map`
-4. query triggers / globals through `ydagent_client.py`
+Self-launching internal baseline:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --map Q:\path\to\copied-map.w3x --internal-usable --close-launched --wait 60
+```
+
+Already-open editor session:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\path\to\copied-map.w3x --internal-usable
+```
 
 ## Current Limits
 
 - global value writes do not use a native memory setter
 - array-global writes are not supported
+- object-editor regression currently covers item/unit/ability string fields and
+  one ability numeric field; upgrade and explicit level/data field cases remain
+  future coverage
 - direct editor automation must go through `YDWE.exe`, not raw `worldedit.exe`
 - generated logs are not a documentation source of truth
