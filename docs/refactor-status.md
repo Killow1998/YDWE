@@ -143,6 +143,9 @@ Verified working:
 - Agent trigger-structure editing is loopback-checked for event, condition, and
   action ECA lists: add ECA, change function name, change parameter value,
   remove ECA, and verify the count returns to the original value
+- `ydagent_live_regression.py --check-trigger-structure` exists for real GUI
+  sessions. It should be enabled after rebuilding `YDTrigger.dll` with the
+  event/condition-safe `ydt_add_eca` fix.
 
 ### GUI-First Proof
 
@@ -385,6 +388,12 @@ Verified in real YDWE sessions:
 - `ydagent_tui.py stub --port 27119` completed after adding event/condition/action
   ECA structure-edit checks; it kept the stub Agent RPC baseline at 44/44
   passing
+- `ydagent_live_regression.py --copy-from ... --internal-usable --close-launched`
+  reached trigger structure validation in a real GUI session, exposed that the
+  current built `YDTrigger.dll` adds an action node even when asked to add an
+  event node, and the source fix now restricts the `CommentString` safe clone to
+  action inserts only. Rebuild with v143 before treating live trigger-structure
+  coverage as complete.
 - `test_object_api.cpp` now contains real-layout roundtrip fixtures for every
   object-editor file type (`w3u`, `w3t`, `w3b`, `w3d`, `w3a`, `w3h`, `w3q`);
   rerun `YDWE_Test` in an environment with MSBuild available
@@ -469,6 +478,9 @@ Verified behavior of the final GUI-only compose demo:
   one-command GUI regression, or the next run can connect to stale worker code
 - `--copy-from` now reports locked target-map copy failures as explicit
   regression errors instead of leaking a Python traceback
+- the current machine only has MSBuild 12.0/v120 installed; `YDWE_Test.vcxproj`
+  requires v143, so native C++ test changes must be built on a machine with the
+  v143 toolset
 - generated logs and scratch files must be cleaned after testing
 - LNI marker-map temp scripts now sanitize control bytes before Wave compile
   - this specifically masks the bad `W2L\x01` marker-name leak seen in some

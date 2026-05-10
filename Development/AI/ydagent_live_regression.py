@@ -463,6 +463,140 @@ def _run_trigger_rename_regression(
     )
 
 
+def _run_trigger_structure_regression(
+    host: str,
+    port: int,
+    trigger_index: int,
+    rpc_timeout: float,
+) -> None:
+    triggers = _rpc(host, port, "agent.list_triggers", timeout=rpc_timeout)
+    _assert(isinstance(triggers, list), "agent.list_triggers returned non-list")
+    _assert(
+        0 <= trigger_index < len(triggers),
+        f"trigger index out of range: {trigger_index} (count={len(triggers)})",
+    )
+
+    for eca_type, label in ((0, "event"), (1, "condition"), (2, "action")):
+        before_count = _rpc(
+            host,
+            port,
+            "agent.eca_count",
+            [trigger_index, eca_type],
+            timeout=rpc_timeout,
+        )
+        _assert(isinstance(before_count, int), f"eca_count({label}) returned non-int")
+        added = False
+        body_error: Exception | None = None
+        restore_errors: list[str] = []
+        new_index = before_count
+
+        try:
+            add_ok = _rpc(
+                host,
+                port,
+                "agent.add_eca",
+                [trigger_index, eca_type],
+                timeout=rpc_timeout,
+            )
+            _assert(add_ok is True, f"agent.add_eca({label}) returned False")
+            added = True
+
+            after_add = _rpc(
+                host,
+                port,
+                "agent.eca_count",
+                [trigger_index, eca_type],
+                timeout=rpc_timeout,
+            )
+            _assert(after_add == before_count + 1, f"agent.add_eca({label}) count mismatch")
+
+            temp_func = f"YDAgent{label.title()}Probe"
+            set_func = _rpc(
+                host,
+                port,
+                "agent.set_eca_func_name",
+                [trigger_index, eca_type, new_index, temp_func],
+                timeout=rpc_timeout,
+            )
+            _assert(set_func is True, f"agent.set_eca_func_name({label}) returned False")
+            got_func = _rpc(
+                host,
+                port,
+                "agent.eca_func_name",
+                [trigger_index, eca_type, new_index],
+                timeout=rpc_timeout,
+            )
+            _assert(got_func == temp_func, f"agent.eca_func_name({label}) verification failed")
+
+            param_count = _rpc(
+                host,
+                port,
+                "agent.eca_param_count",
+                [trigger_index, eca_type, new_index],
+                timeout=rpc_timeout,
+            )
+            if isinstance(param_count, int) and param_count > 0:
+                temp_param = f"{label}_probe_param"
+                set_param = _rpc(
+                    host,
+                    port,
+                    "agent.set_eca_param_value",
+                    [trigger_index, eca_type, new_index, 0, temp_param],
+                    timeout=rpc_timeout,
+                )
+                _assert(set_param is True, f"agent.set_eca_param_value({label}) returned False")
+                got_param = _rpc(
+                    host,
+                    port,
+                    "agent.eca_param_value",
+                    [trigger_index, eca_type, new_index, 0],
+                    timeout=rpc_timeout,
+                )
+                _assert(got_param == temp_param, f"agent.eca_param_value({label}) verification failed")
+
+            print(
+                f"PASS: trigger_structure_set type={label} "
+                f"index={trigger_index} eca_index={new_index}"
+            )
+        except Exception as exc:  # noqa: BLE001
+            body_error = exc
+        finally:
+            if added:
+                try:
+                    remove_ok = _rpc(
+                        host,
+                        port,
+                        "agent.remove_eca",
+                        [trigger_index, eca_type, new_index],
+                        timeout=rpc_timeout,
+                    )
+                    if remove_ok is not True:
+                        restore_errors.append(f"remove added {label} eca returned False")
+                    restored_count = _rpc(
+                        host,
+                        port,
+                        "agent.eca_count",
+                        [trigger_index, eca_type],
+                        timeout=rpc_timeout,
+                    )
+                    if restored_count != before_count:
+                        restore_errors.append(f"{label} eca count restore mismatch")
+                except Exception as exc:
+                    restore_errors.append(f"restore {label} eca error: {exc}")
+
+        if restore_errors:
+            if body_error is not None:
+                raise RegressionError(f"{body_error}; {'; '.join(restore_errors)}")
+            raise RegressionError("; ".join(restore_errors))
+        if body_error is not None:
+            raise body_error
+
+        print(
+            f"PASS: trigger_structure_restore type={label} "
+            f"index={trigger_index} count={before_count}"
+        )
+
+
 def _run_object_read_check(
     host: str,
     port: int,
@@ -1127,6 +1261,14 @@ def run(args: argparse.Namespace) -> LaunchedSession | None:
             args.rpc_timeout,
         )
 
+    if args.check_trigger_structure:
+        _run_trigger_structure_regression(
+            args.host,
+            args.port,
+            args.trigger_index,
+            args.rpc_timeout,
+        )
+
     if args.check_object_read:
         map_path = _read_current_map_path(args.host, args.port)
         for object_type in args.check_object_read:
@@ -1227,6 +1369,11 @@ def main() -> int:
         help="rename one trigger, verify, and restore on current map",
     )
     parser.add_argument(
+        "--check-trigger-structure",
+        action="store_true",
+        help="add/edit/remove event, condition, and action ECAs, then restore counts",
+    )
+    parser.add_argument(
         "--check-object-read",
         action="append",
         metavar="TYPE",
@@ -1254,7 +1401,7 @@ def main() -> int:
         "--trigger-index",
         type=int,
         default=0,
-        help="trigger index for --check-trigger-rename (default: 0)",
+        help="trigger index for trigger checks (default: 0)",
     )
     parser.add_argument(
         "--host",

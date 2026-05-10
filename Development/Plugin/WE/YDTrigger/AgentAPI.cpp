@@ -857,8 +857,9 @@ static int add_eca_to_trigger(DWORD trig, DWORD eca_type, DWORD source_node) {
         const DWORD NODE_SIZE = 0x200;
         const DWORD PARAM_SIZE = 0x200;
 
-        // Prefer CommentString node for safe clone (deep-copies params with valid vtables)
-        DWORD cs_node = find_comment_string_template();
+        // CommentString is a safe action template, but it must not be used for
+        // event/condition inserts because the node's virtual type stays action.
+        DWORD cs_node = eca_type == YDT_ECA_ACTION ? find_comment_string_template() : 0;
         DWORD tpl_node = cs_node ? cs_node : source_node;
 
         DWORD new_node = (DWORD)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, NODE_SIZE);
