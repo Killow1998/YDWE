@@ -123,14 +123,14 @@ rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-l
 For the broader P1/P2 live regression:
 
 ```powershell
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="p1_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear --check-trigger-rename --trigger-index 0 --check-object-field-map item --check-object-field-map unit --check-object-read item --check-object-read unit --check-object-write item --check-object-write unit
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="p1_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear --check-trigger-rename --trigger-index 0 --check-object-field-map item --check-object-field-map unit --check-object-read item --check-object-read unit --check-object-read ability --check-object-write item --check-object-write unit --check-object-write ability
 ```
 
 For the current internal-usable baseline, run the same shape against a copied
 working map and use a distinctive string value, for example:
 
 ```powershell
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\internal_usable_regression.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="internal_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear --check-trigger-rename --trigger-index 0 --check-object-field-map item --check-object-field-map unit --check-object-read item --check-object-read unit --check-object-write item --check-object-write unit
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\internal_usable_regression.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="internal_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear --check-trigger-rename --trigger-index 0 --check-object-field-map item --check-object-field-map unit --check-object-read item --check-object-read unit --check-object-read ability --check-object-write item --check-object-write unit --check-object-write ability
 ```
 
 The reliable regression path is `--no-launch` after the target map is visible in

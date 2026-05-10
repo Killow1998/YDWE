@@ -1323,10 +1323,11 @@ end
 local OBJ_TYPES = {
     unit = 0,
     item = 1,
-    buff = 2,
+    destructable = 2,
+    destructible = 2,
     doodad = 3,
     ability = 4,
-    hero = 5,
+    buff = 5,
     upgrade = 6,
 }
 

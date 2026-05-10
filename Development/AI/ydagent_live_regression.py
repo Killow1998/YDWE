@@ -474,7 +474,14 @@ def _run_object_read_check(
             raise RegressionError(f"object.read({object_type}) returned non-JSON string: {exc}")
 
     _assert(isinstance(result, (dict, list)), f"object.read({object_type}) returned non-object payload")
-    count = len(result)
+    if isinstance(result, dict):
+        count = sum(
+            len(result.get(key, []))
+            for key in ("original", "custom")
+            if isinstance(result.get(key), list)
+        )
+    else:
+        count = len(result)
     _assert(count > 0, f"object.read({object_type}) returned empty data")
     print(f"PASS: object_read type={object_type} count={count}")
 

@@ -55,7 +55,7 @@ working maps without frequent manual rescue.
   - pending global clear behavior
   - trigger rename/restore
   - object archive read
-  - object write/save/readback/restore for at least item and unit
+  - object write/save/readback/restore for at least item, unit, and ability
 - all generated pending sidecars are inspectable from CLI and are cleared after
   successful save/restore
 - failures must be explicit:
@@ -293,7 +293,7 @@ editor process. Use `--no-launch` for the current session.
 Broader P1/P2 regression:
 
 ```powershell
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="p1_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear --check-trigger-rename --trigger-index 0 --check-object-field-map item --check-object-field-map unit --check-object-read item --check-object-read unit --check-object-write item --check-object-write unit
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="p1_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear --check-trigger-rename --trigger-index 0 --check-object-field-map item --check-object-field-map unit --check-object-read item --check-object-read unit --check-object-read ability --check-object-write item --check-object-write unit --check-object-write ability
 ```
 
 ## Verified Results
@@ -343,6 +343,9 @@ Verified in real YDWE sessions:
   completed as the internal-usable baseline; it covered save, four scalar
   global types, pending global clear, reversible trigger rename, item/unit
   object archive reads, item/unit staged object writes, and item/unit field maps
+- `ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\internal_usable_regression_ext.w3x --check-global udg_compose_count=17 --check-object-read item --check-object-read unit --check-object-read ability --check-object-write item --check-object-write unit --check-object-write ability`
+  completed as extended object-editor coverage; item `unam`, unit `uabi`, and
+  ability `anam` were staged, saved, verified, restored, and saved again
 
 Concrete evidence from the 2026-05-09 validation pass:
 
@@ -432,6 +435,9 @@ Verified behavior of the final GUI-only compose demo:
   - use `set_global_value` directly for LNI marker globals
 - object-editor archive writeback is staged when the map is open
   - `object.read` is enabled for extracted real `.w3x` archive object files
+  - object type mapping follows the Warcraft object file order:
+    `unit`, `item`, `destructable`/`destructible`, `doodad`, `ability`,
+    `buff`, `upgrade`
   - ObjectAPI read/write is unit-tested for legacy fixture data, real `.w3t`,
     real `.w3a`, malformed tail data, and truncated legacy files
   - `object.write` can write an extracted/current object file and can replace a
@@ -470,8 +476,8 @@ Verified behavior of the final GUI-only compose demo:
 
 - object-editor field metadata lookup, real archive object reads, and staged
   open-editor object writes are now part of live validation
-- next object-editor work is broadening write regression beyond `item/unam` to
-  unit, ability level-data, and upgrade fields
+- next object-editor work is broadening write regression beyond string fields to
+  ability level-data and upgrade fields
 - keep `docs/refactor-status.md` as the only status document
 
 ## Documentation Rule

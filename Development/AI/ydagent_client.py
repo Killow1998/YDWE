@@ -369,7 +369,7 @@ def main():
             print(f"  add_eca, remove_eca, set_eca_param")
             print(f"Object commands: object_read <type> <map_path>")
             print(f"  object_write <type> <map_path> [json_file]")
-            print(f"  Types: unit, item, buff, doodad, ability, hero, upgrade")
+            print(f"  Types: unit, item, destructable, destructible, doodad, ability, buff, upgrade")
 
     except ConnectionRefusedError:
         print(
