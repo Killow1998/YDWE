@@ -454,6 +454,9 @@ Verified in real YDWE sessions:
   `YDWE_Test.vcxproj`, and executes `YDWE_Test.exe`. The stub loopback runs in
   CI only when the runtime `Development/Component/bin/lua.exe` exists; the
   focused native gate does not produce that runtime binary by itself.
+- The same workflow uploads `ydagent-native-debug` with the rebuilt
+  `YDTrigger.dll/.pdb` and `YDWE_Test.exe/.pdb`, so a machine without local v143
+  can still fetch the validated native DLL for GUI live regression.
 - `test_object_api.cpp` now contains real-layout roundtrip fixtures for every
   object-editor file type (`w3u`, `w3t`, `w3b`, `w3d`, `w3a`, `w3h`, `w3q`);
   rerun `YDWE_Test` in an environment with MSBuild available
