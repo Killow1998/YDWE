@@ -58,6 +58,9 @@ Q:\AppData\ydwe\YDWE\Build\publish\Debug\YDWE.exe Q:\AppData\ydwe\work\compose_d
 - name-based global lookup/write is available through Agent RPC and CLI
 - `ydagent_smoke.py --restore-global` is validated against a real normal `.w3x`
   session after extending slow RPC timeouts
+- `ydagent_live_regression.py` can launch or attach to a debug YDWE session,
+  verify the loaded map, run `save_map`, and perform a reversible scalar global
+  writeback check
 - global parsing reads both `globals` and `InitGlobals`
 - provider configuration UI exists in the editor
 - AI apply flow supports snapshot/rollback
@@ -200,6 +203,27 @@ This mutates one scalar global, verifies readback, then restores the original
 value in the same session. Normal `.w3x` sessions auto-save between write and
 verify; LNI marker sessions use the live file-backed path.
 
+### 9. Live Regression Harness
+
+Use this as the default operator-facing regression entry once a target map is
+open in the refactor debug editor:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v2.w3x
+```
+
+The harness verifies `editor.current_map_path`, runs `editor.save_map`, writes
+and restores `udg_compose_count`, and returns nonzero on failure.
+
+It can also launch `YDWE.exe` itself when no Agent is already running:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --map Q:\AppData\ydwe\work\compose_demo_gui_only_v2.w3x --close-launched
+```
+
+If an Agent is already listening, the launch mode fails before opening another
+editor process. Use `--no-launch` for the current session.
+
 ## Verified Results
 
 ### Live Session
@@ -216,6 +240,10 @@ Verified in real YDWE sessions:
 - `ydagent_smoke.py --restore-global --global-name udg_compose_count --global-value 17`
   completed against `compose_demo_gui_only_v2.w3x` and restored the original
   value
+- `ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v2.w3x`
+  completed against the current live session and restored the original value
+- default launch mode refuses to start another editor while an Agent is already
+  listening on the target port
 - save/compile can be triggered from CLI
 - object-editor and trigger-editor changes can be materialized into real maps
 
@@ -309,6 +337,8 @@ Verified behavior of the final GUI-only compose demo:
 
 - current active target: harden safe global writeback into an operator-friendly
   feature, not just a proof
+- operator-facing live regression entry now exists; next work should extend it
+  beyond the compose-count scalar check only after the current path stays stable
 - pending override management is now exposed through CLI; next validation should
   cover both all-clear and single-global clear against a real pending sidecar
 - scalar input validation now covers integer, real, boolean, and string

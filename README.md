@@ -29,6 +29,8 @@ The maintained project documentation is consolidated under
 - staged global override inspection and clearing for normal `.w3x` sessions
 - scalar global-value validation for integer / real / boolean / string defaults
 - name-based global lookup/write through Agent RPC and CLI
+- one-command live regression harness for map launch/session verification,
+  save/compile, and reversible scalar global writeback
 - LNI-session live global write + immediate readback
 - normal `.w3x` scalar global write + save/compile + reopen readback
 - LNI temp-script save failures caused by leaked control bytes are sanitized at
@@ -100,6 +102,17 @@ rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py rpc agent.list_
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py global_info udg_compose_count
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py pending_globals
 ```
+
+For the standard compose demo map, run the live regression harness against an
+already-open session:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v2.w3x
+```
+
+To let the harness launch the debug editor itself, close existing Agent sessions
+first. The script refuses to open another editor when an Agent is already
+listening on the target port.
 
 ## Status Source
 
