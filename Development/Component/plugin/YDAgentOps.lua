@@ -17,6 +17,63 @@ local OBJECT_TYPES = {
     upgrade = true,
 }
 
+local SEMANTIC_TEMPLATES = {
+    {
+        name = "quest.create",
+        status = "planned",
+        category = "quest",
+        purpose = "Create a GUI quest object and store its handle in a global variable.",
+        required_globals = { "quest" },
+        emits = { "CreateQuestBJ", "QuestSetTitleBJ", "QuestSetDescriptionBJ", "QuestSetIconPathBJ" },
+        verification = "Read the generated GUI trigger ECA list, save the map, and verify the quest global exists.",
+    },
+    {
+        name = "quest.complete_when",
+        status = "planned",
+        category = "quest",
+        purpose = "Evaluate a GUI condition and mark a quest or quest item complete.",
+        required_globals = { "quest", "questitem" },
+        emits = { "QuestSetCompletedBJ", "QuestItemSetCompletedBJ", "DisplayTimedTextToForce" },
+        verification = "Loopback the condition/action ECA list and run save_map.",
+    },
+    {
+        name = "creep_spawn.periodic",
+        status = "planned",
+        category = "spawn",
+        purpose = "Create periodic neutral hostile creep spawns in a region with count caps.",
+        required_globals = { "rect", "group", "timer", "integer" },
+        emits = { "TriggerRegisterTimerEventPeriodic", "CountUnitsInGroup", "CreateNUnitsAtLoc" },
+        verification = "Verify timer event, cap condition, spawn action, and cleanup actions are present.",
+    },
+    {
+        name = "leaderboard.create_or_update",
+        status = "planned",
+        category = "ui",
+        purpose = "Create a GUI leaderboard and update player rows from integer globals.",
+        required_globals = { "leaderboard", "integer" },
+        emits = { "CreateLeaderboardBJ", "LeaderboardAddItemBJ", "LeaderboardSetItemValueBJ", "LeaderboardDisplayBJ" },
+        verification = "Verify leaderboard global, create action, row update actions, and save_map.",
+    },
+    {
+        name = "timer_window.countdown",
+        status = "planned",
+        category = "ui",
+        purpose = "Create a timer, attach a timer dialog, start it, and run timeout actions.",
+        required_globals = { "timer", "timerdialog" },
+        emits = { "CreateTimerDialogBJ", "StartTimerBJ", "TriggerRegisterTimerExpireEventBJ", "DestroyTimerDialogBJ" },
+        verification = "Verify timer/dialog globals, start action, expire event, and cleanup action.",
+    },
+    {
+        name = "dialog.choice",
+        status = "planned",
+        category = "ui",
+        purpose = "Create a GUI dialog with buttons and route clicked-button responses.",
+        required_globals = { "dialog", "button" },
+        emits = { "DialogSetMessageBJ", "DialogAddButtonBJ", "DialogDisplayBJ", "TriggerRegisterDialogButtonEventBJ" },
+        verification = "Verify dialog/button globals, button events, branch conditions, and save_map.",
+    },
+}
+
 local function is_integer(value, min_value)
     return type(value) == "number" and value == math.floor(value) and value >= (min_value or 0)
 end
@@ -319,6 +376,13 @@ function M.schema()
         },
         eca_types = ECA_TYPES,
         object_types = OBJECT_TYPES,
+        semantic_templates = SEMANTIC_TEMPLATES,
+        usage_contract = {
+            "Return operations only; never mutate map files outside ai.apply_plan or documented CLI helpers.",
+            "Prefer semantic templates from docs/agent-gui-api.md for gameplay systems instead of hand-picking random GUI function names.",
+            "If a semantic template is still planned, compile it into the existing low-level operations and verify every emitted ECA after save_map.",
+            "Do not call remove_eca unless allow_non_recoverable=true is intentionally set and the caller accepts that rollback cannot restore the removed GUI node.",
+        },
         safety = "Return operations only. Do not apply changes directly. High-risk operations require user review. remove_eca is non-rollback-safe and requires allow_non_recoverable=true when applying.",
     }
 end

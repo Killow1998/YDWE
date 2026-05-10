@@ -6,6 +6,10 @@ This is the single source of truth for the current `ydwe-refactor` state.
 Do not create new status, summary, handoff, or report markdown files elsewhere
 in the repo. Update this file instead.
 
+For Agent GUI trigger API usage, read `docs/agent-gui-api.md`. That file is the
+contract for future agents that edit quests, creep spawns, leaderboards,
+countdown windows, dialogs, and other GUI-trigger systems.
+
 ## Current State
 
 ### Repository
@@ -163,6 +167,12 @@ Verified working:
   action ECA lists: add ECA, change function name, change parameter value,
   change active state, remove ECA, and verify the count returns to the original
   value
+- `ai.operation_schema` now publishes a semantic GUI template catalog and usage
+  contract. The documented template surface covers quest creation/completion,
+  periodic creep spawns, leaderboard create/update, countdown timer windows, and
+  dialog choice flows. The stable executable layer is still the low-level
+  `ai.apply_plan` operation set until each semantic template is promoted to a
+  one-call RPC.
 - Agent failure recovery is loopback-checked for ECA structure edits: if a plan
   adds an action ECA and a later operation fails, rollback removes the added ECA
   and restores the original ECA count

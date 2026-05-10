@@ -266,6 +266,20 @@ def run_rpc_suite(host: str, port: int, restore: bool, tui: Tui) -> None:
 
     schema = expect("ai.operation_schema", lambda: rpc_call(host, port, "ai.operation_schema"), tui)
     require(isinstance(schema, dict), "operation schema is not an object")
+    semantic_templates = schema.get("semantic_templates")
+    require(isinstance(semantic_templates, list), "operation schema missing semantic_templates")
+    semantic_names = {item.get("name") for item in semantic_templates if isinstance(item, dict)}
+    for expected_template in [
+        "quest.create",
+        "quest.complete_when",
+        "creep_spawn.periodic",
+        "leaderboard.create_or_update",
+        "timer_window.countdown",
+        "dialog.choice",
+    ]:
+        require(expected_template in semantic_names, f"semantic template missing: {expected_template}")
+    usage_contract = schema.get("usage_contract")
+    require(isinstance(usage_contract, list) and usage_contract, "operation schema missing usage_contract")
 
     dry_run = expect(
         "ai.apply_plan dry-run",
