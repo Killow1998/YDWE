@@ -155,6 +155,11 @@ Verified working:
 - `ydagent_live_regression.py --check-object-types` verifies the live Agent
   canonical object-type mapping for every exposed object-editor archive file,
   and `--internal-usable` enables this check by default
+- `ydagent_live_regression.py --check-object-write-all` and
+  `--check-object-numeric-write-all` can run write regression across every
+  exposed object-editor type. Types without usable records or fields in the
+  current map are reported as `SKIP`; real write/save/readback failures still
+  fail the regression.
 - Agent trigger-structure editing is loopback-checked for event, condition, and
   action ECA lists: add ECA, change function name, change parameter value,
   change active state, remove ECA, and verify the count returns to the original
@@ -432,6 +437,9 @@ Verified in real YDWE sessions:
 - `ydagent_live_regression.py --internal-usable` now includes live
   `object.types` canonical mapping verification for all exposed object-editor
   types before map-specific object read/write checks
+- `ydagent_live_regression.py` now exposes explicit all-type object write
+  regression switches for string and numeric fields; they skip only missing map
+  fixtures and fail on real write/readback errors
 - `ydagent_live_regression.py --copy-from ... --internal-usable --close-launched`
   reached trigger structure validation in a real GUI session, exposed that the
   current built `YDTrigger.dll` adds an action node even when asked to add an
@@ -604,6 +612,9 @@ Verified behavior of the final GUI-only compose demo:
 - next object-editor work is broadening write regression beyond the current
   ability numeric field to explicit level/data-sensitive fields and upgrade
   fields
+- all-type object write switches now exist; the next hardening step is building
+  or selecting a canonical regression map with records/fields for every object
+  type so the all-type pass produces `PASS` instead of expected fixture skips
 - keep `docs/refactor-status.md` as the only status document
 
 ## Documentation Rule

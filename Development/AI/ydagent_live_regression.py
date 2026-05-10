@@ -958,6 +958,62 @@ def _run_object_numeric_write_regression(
     print(f"PASS: object_numeric_write_restore type={object_type} field={field_id}")
 
 
+def _is_missing_object_fixture_error(exc: Exception) -> bool:
+    text = str(exc)
+    markers = (
+        "has no records to mutate",
+        "found no string field",
+        "found no numeric field",
+    )
+    return any(marker in text for marker in markers)
+
+
+def _run_all_object_write_regression(
+    host: str,
+    port: int,
+    map_path: str,
+    rpc_timeout: float,
+    save_timeout: float,
+) -> None:
+    for object_type in _ALL_OBJECT_TYPES:
+        try:
+            _run_object_write_regression(
+                host,
+                port,
+                object_type,
+                map_path,
+                rpc_timeout,
+                save_timeout,
+            )
+        except RegressionError as exc:
+            if not _is_missing_object_fixture_error(exc):
+                raise
+            print(f"SKIP: object_write type={object_type} reason={exc}")
+
+
+def _run_all_object_numeric_write_regression(
+    host: str,
+    port: int,
+    map_path: str,
+    rpc_timeout: float,
+    save_timeout: float,
+) -> None:
+    for object_type in _ALL_OBJECT_TYPES:
+        try:
+            _run_object_numeric_write_regression(
+                host,
+                port,
+                object_type,
+                map_path,
+                rpc_timeout,
+                save_timeout,
+            )
+        except RegressionError as exc:
+            if not _is_missing_object_fixture_error(exc):
+                raise
+            print(f"SKIP: object_numeric_write type={object_type} reason={exc}")
+
+
 def _run_object_field_map_check(
     host: str,
     port: int,
@@ -1358,6 +1414,16 @@ def run(args: argparse.Namespace) -> LaunchedSession | None:
                 args.save_timeout,
             )
 
+    if args.check_object_write_all:
+        map_path = _read_current_map_path(args.host, args.port)
+        _run_all_object_write_regression(
+            args.host,
+            args.port,
+            map_path,
+            args.rpc_timeout,
+            args.save_timeout,
+        )
+
     if args.check_object_numeric_write:
         map_path = _read_current_map_path(args.host, args.port)
         for object_type in args.check_object_numeric_write:
@@ -1369,6 +1435,16 @@ def run(args: argparse.Namespace) -> LaunchedSession | None:
                 args.rpc_timeout,
                 args.save_timeout,
             )
+
+    if args.check_object_numeric_write_all:
+        map_path = _read_current_map_path(args.host, args.port)
+        _run_all_object_numeric_write_regression(
+            args.host,
+            args.port,
+            map_path,
+            args.rpc_timeout,
+            args.save_timeout,
+        )
 
     if args.check_object_field_map:
         for object_type in args.check_object_field_map:
@@ -1457,10 +1533,20 @@ def main() -> int:
         help="mutate one string object field, save, verify, and restore; repeatable",
     )
     parser.add_argument(
+        "--check-object-write-all",
+        action="store_true",
+        help="run string object write regression for every exposed type; missing fixtures are skipped",
+    )
+    parser.add_argument(
         "--check-object-numeric-write",
         action="append",
         metavar="TYPE",
         help="mutate one numeric object field, save, verify, and restore; repeatable",
+    )
+    parser.add_argument(
+        "--check-object-numeric-write-all",
+        action="store_true",
+        help="run numeric object write regression for every exposed type; missing fixtures are skipped",
     )
     parser.add_argument(
         "--check-object-field-map",
