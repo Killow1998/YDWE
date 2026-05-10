@@ -233,6 +233,12 @@ rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_fetch_native_artifact.py 
 The installer backs up the existing
 `Build/publish/Debug/plugin/YDTrigger.dll` before replacing it.
 
+Check the currently installed Debug DLL:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_fetch_native_artifact.py --verify-runtime
+```
+
 ### 2. Launch
 
 ```powershell
@@ -485,7 +491,9 @@ Verified in real YDWE sessions:
   can install the rebuilt `YDTrigger.dll` into the local Debug runtime with a
   timestamped backup of the previous DLL. It also accepts `--zip` for an
   already downloaded Actions artifact, so local installation does not require an
-  API token when the zip is obtained from the browser.
+  API token when the zip is obtained from the browser. The installer verifies
+  required Agent native exports before copying, and `--verify-runtime` checks
+  whether the current Debug runtime DLL already contains those exports.
 - `test_object_api.cpp` now contains real-layout roundtrip fixtures for every
   object-editor file type (`w3u`, `w3t`, `w3b`, `w3d`, `w3a`, `w3h`, `w3q`);
   rerun `YDWE_Test` in an environment with MSBuild available
