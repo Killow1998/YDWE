@@ -335,7 +335,11 @@ def ensure_item_ini(path: Path) -> None:
 
 def upsert_custom_item(item_ini: Path) -> None:
     ensure_item_ini(item_ini)
-    parser = configparser.ConfigParser(interpolation=None)
+    parser = configparser.ConfigParser(
+        interpolation=None,
+        comment_prefixes=("#", ";", "--"),
+        inline_comment_prefixes=None,
+    )
     parser.optionxform = str
     parser.read(item_ini, encoding="utf-8")
     if CUSTOM_ITEM_ID not in parser:
@@ -381,6 +385,8 @@ def apply_global_crud(variable_lml: Path) -> None:
     upsert_global(vars_, "compose_ready", "integer", {DEFAULT_KEY: "0"})
     upsert_global(vars_, "compose_stage", "string", {DEFAULT_KEY: "ready"})
     upsert_global(vars_, "compose_count", "integer", {DEFAULT_KEY: "0"})
+    upsert_global(vars_, "compose_ratio", "real", {DEFAULT_KEY: "1.25"})
+    upsert_global(vars_, "compose_enabled", "boolean", {DEFAULT_KEY: "true"})
     upsert_global(vars_, "compose_temp", "integer", {DEFAULT_KEY: "9"})
     # Modify
     upsert_global(vars_, "compose_stage", "string", {DEFAULT_KEY: "armed"})
@@ -404,6 +410,12 @@ def verify_lni_tree(lni_root: Path) -> None:
     assert "compose_count" in by_name, "compose_count missing"
     count_default = next((v for k, v in by_name["compose_count"].options.items() if k.startswith("Def")), None)
     assert count_default == "0", "compose_count default mismatch"
+    assert "compose_ratio" in by_name, "compose_ratio missing"
+    ratio_default = next((v for k, v in by_name["compose_ratio"].options.items() if k.startswith("Def")), None)
+    assert ratio_default == "1.25", "compose_ratio default mismatch"
+    assert "compose_enabled" in by_name, "compose_enabled missing"
+    enabled_default = next((v for k, v in by_name["compose_enabled"].options.items() if k.startswith("Def")), None)
+    assert enabled_default == "true", "compose_enabled default mismatch"
     assert "compose_temp" not in by_name, "compose_temp should have been deleted"
 
     item_ini = lni_root / "table" / "item.ini"

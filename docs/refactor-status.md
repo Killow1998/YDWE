@@ -35,7 +35,7 @@ path is `YDWE.exe -> worldeditydwe.exe`.
 Direct debug startup with a bare map path is supported again:
 
 ```powershell
-Q:\AppData\ydwe\YDWE\Build\publish\Debug\YDWE.exe Q:\AppData\ydwe\work\compose_demo_gui_only_v2.w3x
+Q:\AppData\ydwe\YDWE\Build\publish\Debug\YDWE.exe Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x
 ```
 
 ## Delivered Capabilities
@@ -95,7 +95,7 @@ The refactor already proved that the Agent path edits real GUI map content:
 
 Reference demo artifact:
 
-- `Q:\AppData\ydwe\work\compose_demo_gui_only_v2.w3x`
+- `Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x`
 
 Generation helper:
 
@@ -209,16 +209,18 @@ Use this as the default operator-facing regression entry once a target map is
 open in the refactor debug editor:
 
 ```powershell
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v2.w3x
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x
 ```
 
 The harness verifies `editor.current_map_path`, runs `editor.save_map`, writes
 and restores `udg_compose_count`, and returns nonzero on failure.
 
-It can also launch `YDWE.exe` itself when no Agent is already running:
+It can also launch `YDWE.exe` itself when no Agent is already running, but this
+is currently only a launch-path check. For scalar/pending regression, prefer
+`--no-launch` after the target map is visible in the editor:
 
 ```powershell
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --map Q:\AppData\ydwe\work\compose_demo_gui_only_v2.w3x --close-launched
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --close-launched
 ```
 
 If an Agent is already listening, the launch mode fails before opening another
@@ -242,6 +244,10 @@ Verified in real YDWE sessions:
   value
 - `ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v2.w3x`
   completed against the current live session and restored the original value
+- `ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="p0_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear`
+  completed against the current live session; integer/string/real/boolean
+  scalar writeback restored cleanly, and pending override single-clear/all-clear
+  both passed
 - default launch mode refuses to start another editor while an Agent is already
   listening on the target port
 - save/compile can be triggered from CLI
@@ -267,7 +273,7 @@ Concrete evidence from the 2026-05-09 validation pass:
 
 Normal `.w3x` persistence evidence from the same validation pass:
 
-- target session: `Q:\AppData\ydwe\work\compose_demo_gui_only_v2.w3x`
+- target session: `Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x`
 - after initial `save_map`, `diag.status` reported `global_count: 26`
 - `agent.global_name 11/12` resolved to:
   - `udg_compose_stage`
@@ -320,6 +326,9 @@ Verified behavior of the final GUI-only compose demo:
 
 - editor automation is environment-sensitive
 - tests must start from `YDWE.exe`
+- cold self-launch can bring the Agent online before native trigger/global
+  capture is ready; use `ydagent_live_regression.py --no-launch` as the reliable
+  P0 regression path after the target map is visibly loaded
 - generated logs and scratch files must be cleaned after testing
 - LNI marker-map temp scripts now sanitize control bytes before Wave compile
   - this specifically masks the bad `W2L\x01` marker-name leak seen in some
@@ -339,11 +348,11 @@ Verified behavior of the final GUI-only compose demo:
   feature, not just a proof
 - operator-facing live regression entry now exists; next work should extend it
   beyond the compose-count scalar check only after the current path stays stable
-- pending override management is now exposed through CLI; next validation should
-  cover both all-clear and single-global clear against a real pending sidecar
+- pending override management is exposed through CLI and validated against a
+  real pending sidecar for both single-global clear and map-wide clear
 - scalar input validation now covers integer, real, boolean, and string
-- next live validation should persist and reopen `real` and `boolean` globals in
-  a normal `.w3x` session, matching the already verified integer/string path
+- live validation covers integer, string, real, and boolean scalar globals in a
+  normal `.w3x` session
 - keep direct native memory writes disabled unless a proven safe native path
   exists
 

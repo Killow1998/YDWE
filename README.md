@@ -29,8 +29,8 @@ The maintained project documentation is consolidated under
 - staged global override inspection and clearing for normal `.w3x` sessions
 - scalar global-value validation for integer / real / boolean / string defaults
 - name-based global lookup/write through Agent RPC and CLI
-- one-command live regression harness for map launch/session verification,
-  save/compile, and reversible scalar global writeback
+- live regression harness for map launch/session verification, save/compile,
+  reversible scalar global writeback, and pending global override cleanup
 - LNI-session live global write + immediate readback
 - normal `.w3x` scalar global write + save/compile + reopen readback
 - LNI temp-script save failures caused by leaked control bytes are sanitized at
@@ -88,7 +88,7 @@ Do not directly start `worldedit.exe` for Agent/runtime validation.
 To open a target map directly through the debug startup path:
 
 ```powershell
-Q:\AppData\ydwe\YDWE\Build\publish\Debug\YDWE.exe Q:\AppData\ydwe\work\compose_demo_gui_only_v2.w3x
+Q:\AppData\ydwe\YDWE\Build\publish\Debug\YDWE.exe Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x
 ```
 
 ## Minimal Verification
@@ -107,12 +107,18 @@ For the standard compose demo map, run the live regression harness against an
 already-open session:
 
 ```powershell
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v2.w3x
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x
 ```
 
-To let the harness launch the debug editor itself, close existing Agent sessions
-first. The script refuses to open another editor when an Agent is already
-listening on the target port.
+For the P0 scalar/pending regression set:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="p0_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear
+```
+
+The reliable regression path is `--no-launch` after the target map is visible in
+the refactor debug editor. Cold self-launch can bring the Agent online before
+native trigger/global capture is ready, so use it only for launch-path checks.
 
 ## Status Source
 
