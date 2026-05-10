@@ -98,27 +98,33 @@ def _install(output_dir: Path, runtime_plugin: Path) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Download the latest successful YDWE Agent native CI artifact")
+    parser = argparse.ArgumentParser(description="Download or install a YDWE Agent native CI artifact")
     parser.add_argument("--repo", default=DEFAULT_REPO, help=f"GitHub repo, owner/name (default: {DEFAULT_REPO})")
     parser.add_argument("--workflow", default=DEFAULT_WORKFLOW, help=f"workflow file name (default: {DEFAULT_WORKFLOW})")
     parser.add_argument("--artifact", default=DEFAULT_ARTIFACT, help=f"artifact name (default: {DEFAULT_ARTIFACT})")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help=f"extract output dir (default: {DEFAULT_OUTPUT})")
+    parser.add_argument("--zip", type=Path, help="use an already downloaded artifact zip instead of GitHub API download")
     parser.add_argument("--install", action="store_true", help="install YDTrigger.dll into Build/publish/Debug/plugin after download")
     parser.add_argument("--runtime-plugin", type=Path, default=DEFAULT_RUNTIME_PLUGIN, help=f"runtime plugin dir (default: {DEFAULT_RUNTIME_PLUGIN})")
     args = parser.parse_args()
 
-    token = _token()
-    if not token:
-        print("FAIL: set GH_TOKEN or GITHUB_TOKEN with Actions artifact read access")
-        return 1
-
     try:
-        run = _latest_successful_run(args.repo, args.workflow, token)
-        run_id = int(run["id"])
-        print(f"RUN: {run_id} {run.get('head_sha')} {run.get('html_url')}")
-        artifact = _find_artifact(args.repo, run_id, args.artifact, token)
-        zip_path = args.output.with_suffix(".zip")
-        _download(str(artifact["archive_download_url"]), zip_path, token)
+        if args.zip:
+            zip_path = args.zip.resolve()
+            if not zip_path.exists():
+                raise RuntimeError(f"artifact zip not found: {zip_path}")
+            print(f"ZIP: {zip_path}")
+        else:
+            token = _token()
+            if not token:
+                print("FAIL: set GH_TOKEN or GITHUB_TOKEN with Actions artifact read access, or pass --zip")
+                return 1
+            run = _latest_successful_run(args.repo, args.workflow, token)
+            run_id = int(run["id"])
+            print(f"RUN: {run_id} {run.get('head_sha')} {run.get('html_url')}")
+            artifact = _find_artifact(args.repo, run_id, args.artifact, token)
+            zip_path = args.output.with_suffix(".zip")
+            _download(str(artifact["archive_download_url"]), zip_path, token)
         _extract(zip_path, args.output)
         print(f"EXTRACTED: {args.output}")
         if args.install:

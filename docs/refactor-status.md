@@ -460,7 +460,9 @@ Verified in real YDWE sessions:
 - `ydagent_fetch_native_artifact.py` can download the latest successful
   `ydagent-native-debug` artifact when `GH_TOKEN` or `GITHUB_TOKEN` is set, and
   can install the rebuilt `YDTrigger.dll` into the local Debug runtime with a
-  timestamped backup of the previous DLL.
+  timestamped backup of the previous DLL. It also accepts `--zip` for an
+  already downloaded Actions artifact, so local installation does not require an
+  API token when the zip is obtained from the browser.
 - `test_object_api.cpp` now contains real-layout roundtrip fixtures for every
   object-editor file type (`w3u`, `w3t`, `w3b`, `w3d`, `w3a`, `w3h`, `w3q`);
   rerun `YDWE_Test` in an environment with MSBuild available
