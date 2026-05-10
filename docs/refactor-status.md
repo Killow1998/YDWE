@@ -152,6 +152,9 @@ Verified working:
 - Agent trigger-structure editing is loopback-checked for event, condition, and
   action ECA lists: add ECA, change function name, change parameter value,
   remove ECA, and verify the count returns to the original value
+- Agent failure recovery is loopback-checked for ECA structure edits: if a plan
+  adds an action ECA and a later operation fails, rollback removes the added ECA
+  and restores the original ECA count
 - `ydagent_live_regression.py --check-trigger-structure` exists for real GUI
   sessions. It should be enabled after rebuilding `YDTrigger.dll` with the
   event/condition-safe `ydt_add_eca` fix.
@@ -401,6 +404,8 @@ Verified in real YDWE sessions:
 - `ydagent_tui.py stub --port 27119` completed after adding event/condition/action
   ECA structure-edit checks; it kept the stub Agent RPC baseline at 44/44
   passing
+- `ydagent_tui.py stub --port 27119` completed after adding ECA add rollback
+  coverage; it kept the stub Agent RPC baseline at 47/47 passing
 - `ydagent_live_regression.py --copy-from ... --internal-usable --close-launched`
   reached trigger structure validation in a real GUI session, exposed that the
   current built `YDTrigger.dll` adds an action node even when asked to add an
@@ -552,8 +557,9 @@ Verified behavior of the final GUI-only compose demo:
 - trigger rename is now part of the live regression harness and verified
   reversible on the GUI-only demo map
 - trigger ECA structure editing has stub coverage for event/condition/action
-  add, function edit, parameter edit, remove, and rollback, but real GUI coverage
-  is blocked until `YDTrigger.dll` is rebuilt with the v143 toolset
+  add, function edit, parameter edit, remove, and add-then-fail rollback, but
+  real GUI coverage is blocked until `YDTrigger.dll` is rebuilt with the v143
+  toolset
 - fresh-session verification is still limited by cold native trigger/global
   capture; the reliable automated path remains `--no-launch` after map load
 - keep GUI-trigger-first test cases as the primary proof path

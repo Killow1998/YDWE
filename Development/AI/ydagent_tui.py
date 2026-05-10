@@ -317,6 +317,45 @@ def run_rpc_suite(host: str, port: int, restore: bool, tui: Tui) -> None:
     )
     require(disabled_after_rollback is False, f"trigger disabled was not restored: {disabled_after_rollback!r}")
 
+    eca_before_rollback = expect(
+        "agent.eca_count action before add rollback",
+        lambda: rpc_call(host, port, "agent.eca_count", [0, 2]),
+        tui,
+    )
+    require(isinstance(eca_before_rollback, int), f"action eca count is not int: {eca_before_rollback!r}")
+    eca_rollback = expect(
+        "ai.apply_plan eca add rollback",
+        lambda: rpc_call(
+            host,
+            port,
+            "ai.apply_plan",
+            [
+                {
+                    "operations": [
+                        {"op": "add_eca", "trigger_index": 0, "eca_type": 2, "func": "TuiRollbackAction"},
+                        {"op": "set_trigger_name", "trigger_index": 999, "name": "MissingTrigger"},
+                    ]
+                },
+                {"dry_run": False, "confirm": True},
+            ],
+        ),
+        tui,
+    )
+    require(isinstance(eca_rollback, dict), "eca rollback result is not an object")
+    require(eca_rollback.get("ok") is False, f"eca rollback scenario should fail: {eca_rollback!r}")
+    require(isinstance(eca_rollback.get("rollback_results"), list), f"eca rollback results missing: {eca_rollback!r}")
+    require(len(eca_rollback["rollback_results"]) == 1, f"unexpected eca rollback count: {eca_rollback!r}")
+    require(eca_rollback["rollback_results"][0].get("ok") is True, f"eca rollback failed: {eca_rollback!r}")
+    eca_after_rollback = expect(
+        "agent.eca_count action after add rollback",
+        lambda: rpc_call(host, port, "agent.eca_count", [0, 2]),
+        tui,
+    )
+    require(
+        eca_after_rollback == eca_before_rollback,
+        f"action eca count was not restored: before={eca_before_rollback!r} after={eca_after_rollback!r}",
+    )
+
     if globals_:
         global_write = expect("agent.set_global_value rejects unsafe write", lambda: rpc_call(host, port, "agent.set_global_value", [0, "99"]), tui)
         require(global_write is False, f"global write should be false, got {global_write!r}")
