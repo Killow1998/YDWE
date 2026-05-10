@@ -79,6 +79,19 @@ def _find_artifact(repo: str, run_id: int, artifact_name: str, token: str) -> di
     raise RuntimeError(f"artifact not found or expired: {artifact_name}")
 
 
+def _print_artifact_info(repo: str, workflow: str, artifact_name: str, token: str) -> None:
+    run = _latest_successful_run(repo, workflow, token)
+    run_id = int(run["id"])
+    print(f"RUN: {run_id}")
+    print(f"SHA: {run.get('head_sha')}")
+    print(f"URL: {run.get('html_url')}")
+    artifact = _find_artifact(repo, run_id, artifact_name, token)
+    print(f"ARTIFACT: {artifact.get('name')}")
+    print(f"SIZE: {artifact.get('size_in_bytes')}")
+    print(f"EXPIRED: {artifact.get('expired')}")
+    print(f"DOWNLOAD_API: {artifact.get('archive_download_url')}")
+
+
 def _extract(zip_path: Path, output_dir: Path) -> None:
     if output_dir.exists():
         shutil.rmtree(output_dir)
@@ -179,6 +192,7 @@ def main() -> int:
     parser.add_argument("--artifact", default=DEFAULT_ARTIFACT, help=f"artifact name (default: {DEFAULT_ARTIFACT})")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help=f"extract output dir (default: {DEFAULT_OUTPUT})")
     parser.add_argument("--zip", type=Path, help="use an already downloaded artifact zip instead of GitHub API download")
+    parser.add_argument("--info", action="store_true", help="print the latest successful run and artifact metadata without downloading")
     parser.add_argument("--install", action="store_true", help="install YDTrigger.dll into Build/publish/Debug/plugin after download")
     parser.add_argument("--verify-runtime", action="store_true", help="verify the currently installed Debug runtime YDTrigger.dll and exit")
     parser.add_argument("--runtime-plugin", type=Path, default=DEFAULT_RUNTIME_PLUGIN, help=f"runtime plugin dir (default: {DEFAULT_RUNTIME_PLUGIN})")
@@ -187,6 +201,9 @@ def main() -> int:
     try:
         if args.verify_runtime:
             _verify_ydtrigger(args.runtime_plugin / "YDTrigger.dll")
+            return 0
+        if args.info:
+            _print_artifact_info(args.repo, args.workflow, args.artifact, _token())
             return 0
         if args.zip:
             zip_path = args.zip.resolve()
