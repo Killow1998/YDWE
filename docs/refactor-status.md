@@ -137,6 +137,9 @@ Verified working:
 - read / write object-editor fields
 - object-editor field metadata can be queried safely through Agent RPC
 - save / compile from CLI through the live editor session
+- Agent object type mapping is loopback-checked for all exposed object-editor
+  types: `unit`, `item`, `destructable`/`destructible`, `doodad`, `ability`,
+  `buff`, and `upgrade`
 
 ### GUI-First Proof
 
@@ -372,6 +375,13 @@ Verified in real YDWE sessions:
   session, and left no pending sidecars behind
 - `ydagent_tui.py stub --port 27119` completed after adding script-global
   fallback support; it kept the stub Agent RPC baseline at 13/13 passing
+- `ydagent_tui.py stub --port 27119` completed after adding full object type
+  mapping checks, `object_set_field` validation for destructable objects, and
+  apply-plan failure rollback coverage; it kept the stub Agent RPC baseline at
+  17/17 passing
+- `test_object_api.cpp` now contains real-layout roundtrip fixtures for every
+  object-editor file type (`w3u`, `w3t`, `w3b`, `w3d`, `w3a`, `w3h`, `w3q`);
+  rerun `YDWE_Test` in an environment with MSBuild available
 
 Concrete evidence from the 2026-05-09 validation pass:
 
@@ -451,6 +461,8 @@ Verified behavior of the final GUI-only compose demo:
 - a failed cold self-launch can leave an editor process holding the default
   Agent port and test map lock; close that editor before rerunning the
   one-command GUI regression, or the next run can connect to stale worker code
+- `--copy-from` now reports locked target-map copy failures as explicit
+  regression errors instead of leaking a Python traceback
 - generated logs and scratch files must be cleaned after testing
 - LNI marker-map temp scripts now sanitize control bytes before Wave compile
   - this specifically masks the bad `W2L\x01` marker-name leak seen in some
@@ -466,6 +478,8 @@ Verified behavior of the final GUI-only compose demo:
   - object type mapping follows the Warcraft object file order:
     `unit`, `item`, `destructable`/`destructible`, `doodad`, `ability`,
     `buff`, `upgrade`
+  - `ObjectAPI.h` uses the same canonical mapping; `w3b` is
+    destructable/destructible and `w3h` is buff
   - ObjectAPI read/write is unit-tested for legacy fixture data, real `.w3t`,
     real `.w3a`, malformed tail data, and truncated legacy files
   - `object.write` can write an extracted/current object file and can replace a

@@ -64,6 +64,7 @@ package.path = {lua_string(package_path)} .. package.path
 package.cpath = {lua_string(package_cpath)} .. package.cpath
 _G.YDAGENT_PORT = {port}
 _G.YDAGENT_COMPONENT_ROOT = {lua_string(component_root)}
+_G.YDAGENT_TEST_APPROVE_APPLY = true
 local triggers = {{
     {{
         name = "TUI_Trigger_0",
@@ -156,6 +157,18 @@ def run_rpc_suite(host: str, port: int, restore: bool, tui: Tui) -> None:
     globals_ = expect("agent.list_globals", lambda: rpc_call(host, port, "agent.list_globals"), tui)
     require(isinstance(globals_, list), "globals is not a list")
 
+    object_types = expect("object.types", lambda: rpc_call(host, port, "object.types"), tui)
+    require(isinstance(object_types, list), "object types is not a list")
+    object_files = {entry.get("name"): entry.get("file") for entry in object_types if isinstance(entry, dict)}
+    require(object_files.get("unit") == "war3map.w3u", f"bad unit mapping: {object_files!r}")
+    require(object_files.get("item") == "war3map.w3t", f"bad item mapping: {object_files!r}")
+    require(object_files.get("destructable") == "war3map.w3b", f"bad destructable mapping: {object_files!r}")
+    require(object_files.get("destructible") == "war3map.w3b", f"bad destructible mapping: {object_files!r}")
+    require(object_files.get("doodad") == "war3map.w3d", f"bad doodad mapping: {object_files!r}")
+    require(object_files.get("ability") == "war3map.w3a", f"bad ability mapping: {object_files!r}")
+    require(object_files.get("buff") == "war3map.w3h", f"bad buff mapping: {object_files!r}")
+    require(object_files.get("upgrade") == "war3map.w3q", f"bad upgrade mapping: {object_files!r}")
+
     pending = expect("agent.list_pending_globals", lambda: rpc_call(host, port, "agent.list_pending_globals", ["*"]), tui)
     require(isinstance(pending, dict), "pending globals is not an object")
 
@@ -185,6 +198,61 @@ def run_rpc_suite(host: str, port: int, restore: bool, tui: Tui) -> None:
     require(snapshot.get("target") == "trigger", f"unexpected preview target: {snapshot!r}")
     require(snapshot.get("field") == "disabled", f"unexpected preview field: {snapshot!r}")
     require(snapshot.get("after") is False, f"unexpected preview after value: {snapshot!r}")
+
+    object_validation = expect(
+        "ai.validate_plan object types",
+        lambda: rpc_call(
+            host,
+            port,
+            "ai.validate_plan",
+            [
+                {
+                    "operations": [
+                        {
+                            "op": "object_set_field",
+                            "type_name": "destructable",
+                            "record_kind": "custom",
+                            "object_id": "B000",
+                            "field_id": "unam",
+                            "value": "x",
+                        }
+                    ]
+                }
+            ],
+        ),
+        tui,
+    )
+    require(isinstance(object_validation, dict) and object_validation.get("ok") is True, f"bad object validation: {object_validation!r}")
+
+    rollback = expect(
+        "ai.apply_plan rollback",
+        lambda: rpc_call(
+            host,
+            port,
+            "ai.apply_plan",
+            [
+                {
+                    "operations": [
+                        {"op": "set_trigger_disabled", "trigger_index": 0, "disabled": True},
+                        {"op": "set_trigger_name", "trigger_index": 999, "name": "MissingTrigger"},
+                    ]
+                },
+                {"dry_run": False, "confirm": True},
+            ],
+        ),
+        tui,
+    )
+    require(isinstance(rollback, dict), "rollback result is not an object")
+    require(rollback.get("ok") is False, f"rollback scenario should fail: {rollback!r}")
+    require(isinstance(rollback.get("rollback_results"), list), f"rollback results missing: {rollback!r}")
+    require(len(rollback["rollback_results"]) == 1, f"unexpected rollback count: {rollback!r}")
+    require(rollback["rollback_results"][0].get("ok") is True, f"rollback failed: {rollback!r}")
+    disabled_after_rollback = expect(
+        "agent.trigger_disabled after rollback",
+        lambda: rpc_call(host, port, "agent.trigger_disabled", [0]),
+        tui,
+    )
+    require(disabled_after_rollback is False, f"trigger disabled was not restored: {disabled_after_rollback!r}")
 
     if globals_:
         global_write = expect("agent.set_global_value rejects unsafe write", lambda: rpc_call(host, port, "agent.set_global_value", [0, "99"]), tui)

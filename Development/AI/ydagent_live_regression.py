@@ -48,6 +48,7 @@ _INTERNAL_USABLE_GLOBALS = [
     "udg_compose_enabled=false",
 ]
 _INTERNAL_USABLE_OBJECTS = ["item", "unit", "ability"]
+_ALL_OBJECT_TYPES = ["unit", "item", "destructable", "doodad", "ability", "buff", "upgrade"]
 
 
 def _assert(cond: bool, message: str) -> None:
@@ -893,7 +894,7 @@ def _apply_internal_usable_profile(args: argparse.Namespace) -> None:
     args.check_object_read = _append_unique(args.check_object_read, _INTERNAL_USABLE_OBJECTS)
     args.check_object_write = _append_unique(args.check_object_write, _INTERNAL_USABLE_OBJECTS)
     args.check_object_numeric_write = _append_unique(args.check_object_numeric_write, ["ability"])
-    args.check_object_field_map = _append_unique(args.check_object_field_map, ["item", "unit"])
+    args.check_object_field_map = _append_unique(args.check_object_field_map, _ALL_OBJECT_TYPES)
 
 
 def _copy_regression_map(source: Path, target: Path, no_launch: bool) -> None:
@@ -906,7 +907,14 @@ def _copy_regression_map(source: Path, target: Path, no_launch: bool) -> None:
     if not source.exists():
         raise RegressionError(f"--copy-from source does not exist: {source}")
     target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, target)
+    try:
+        shutil.copy2(source, target)
+    except PermissionError as exc:
+        raise RegressionError(
+            f"cannot copy map to {target}; close any editor using the target map and retry"
+        ) from exc
+    except OSError as exc:
+        raise RegressionError(f"cannot copy map from {source} to {target}: {exc}") from exc
     print(f"PASS: copied_map source={source} target={target}")
 
 

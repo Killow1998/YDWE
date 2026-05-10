@@ -304,6 +304,9 @@ local function clear_apply_approvals()
 end
 
 local function consume_apply_approval()
+    if rawget(_G, "YDAGENT_TEST_STUB") and rawget(_G, "YDAGENT_TEST_APPROVE_APPLY") == true then
+        return true
+    end
     local ch = open_channel(APPLY_APPROVAL_CHANNEL)
     if not ch then
         return false
@@ -1409,7 +1412,10 @@ end
 
 function agent.trigger_disabled(idx)
     local r = YDT.ydt_get_trigger_disabled(idx)
-    return r >= 0 and (r ~= 0) or nil
+    if r >= 0 then
+        return r ~= 0
+    end
+    return nil
 end
 
 function agent.eca_count(idx, eca_type)

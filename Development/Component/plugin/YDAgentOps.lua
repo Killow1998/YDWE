@@ -9,10 +9,11 @@ local ECA_TYPES = {
 local OBJECT_TYPES = {
     unit = true,
     item = true,
-    buff = true,
+    destructable = true,
+    destructible = true,
     doodad = true,
     ability = true,
-    hero = true,
+    buff = true,
     upgrade = true,
 }
 

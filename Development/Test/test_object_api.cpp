@@ -138,6 +138,45 @@ static std::vector<unsigned char> make_real_layout_w3a() {
     return out;
 }
 
+static std::vector<unsigned char> make_real_layout_object(
+    const char* parent_id,
+    const char* object_id,
+    const char* field_id,
+    const char* value,
+    bool has_level
+) {
+    std::vector<unsigned char> out;
+    auto w32 = [&](DWORD v) {
+        for (int i = 0; i < 4; i++)
+            out.push_back((unsigned char)((v >> (i * 8)) & 0xFF));
+    };
+    auto id = [&](const char* s) {
+        for (int i = 0; i < 4; ++i)
+            out.push_back((unsigned char)(s[i] ? s[i] : 0));
+    };
+    auto z = [&](const char* s) {
+        for (const char* p = s; *p; ++p)
+            out.push_back((unsigned char)*p);
+        out.push_back(0);
+    };
+
+    w32(2);
+    w32(0);
+    w32(1);
+    id(parent_id);
+    id(object_id);
+    w32(1);
+    id(field_id);
+    w32(3);
+    if (has_level) {
+        w32(1);
+        w32(0);
+    }
+    z(value);
+    w32(0);
+    return out;
+}
+
 TEST_CASE("ObjectAPI — w3u binary read", "[object][binary]") {
     auto blob = make_minimal_w3u();
     auto path = write_temp(blob);
@@ -317,4 +356,47 @@ TEST_CASE("ObjectAPI real object layout with level data", "[object][real][level]
     REQUIRE(j2.find("\"level\":1") != std::string::npos);
 
     DeleteFileA(path.c_str());
+}
+
+TEST_CASE("ObjectAPI real layout covers every object editor file type", "[object][real][types]") {
+    struct Case {
+        const char* label;
+        const char* suffix;
+        const char* parent_id;
+        const char* object_id;
+        bool has_level;
+    };
+    const Case cases[] = {
+        {"unit", "w3u", "hfoo", "U000", false},
+        {"item", "w3t", "tstr", "I000", false},
+        {"destructable", "w3b", "LTlt", "B000", false},
+        {"doodad", "w3d", "D000", "D001", true},
+        {"ability", "w3a", "AHbz", "A000", true},
+        {"buff", "w3h", "BHbn", "H000", false},
+        {"upgrade", "w3q", "R000", "R001", true},
+    };
+
+    for (const auto& tc : cases) {
+        std::string file_name = std::string("ydwe_test_real_layout_") + tc.label + "." + tc.suffix;
+        std::string value = std::string("Name_") + tc.label;
+        auto blob = make_real_layout_object(tc.parent_id, tc.object_id, "unam", value.c_str(), tc.has_level);
+        auto path = write_temp_named(blob, file_name.c_str());
+        REQUIRE(!path.empty());
+
+        const char* json = ydt_read_object_file(path.c_str());
+        INFO("Object type: " << tc.label);
+        REQUIRE(json != nullptr);
+        std::string j(json);
+        REQUIRE(j.find(std::string("\"id\":\"") + tc.object_id + "\"") != std::string::npos);
+        REQUIRE(j.find(std::string("\"unam\":\"") + value + "\"") != std::string::npos);
+        REQUIRE(j.find(tc.has_level ? "\"level\":1" : "\"level\":0") != std::string::npos);
+
+        REQUIRE(ydt_write_object_file(path.c_str(), json) == 1);
+        const char* json2 = ydt_read_object_file(path.c_str());
+        REQUIRE(json2 != nullptr);
+        REQUIRE(std::string(json2).find(std::string("\"id\":\"") + tc.object_id + "\"") != std::string::npos);
+        REQUIRE(std::string(json2).find(std::string("\"unam\":\"") + value + "\"") != std::string::npos);
+
+        DeleteFileA(path.c_str());
+    }
 }
