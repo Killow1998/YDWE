@@ -7,6 +7,7 @@ EXPORTS
     ydt_get_eca_count
     ydt_get_eca_func_name
     ydt_get_eca_gui_id
+    ydt_get_eca_active
     ydt_get_eca_param_count
     ydt_get_eca_param_value
     ydt_set_trigger_name

@@ -805,6 +805,20 @@ int __cdecl ydt_set_eca_active(int trig_index, int eca_type, int eca_idx, int ac
     }
 }
 
+int __cdecl ydt_get_eca_active(int trig_index, int eca_type, int eca_idx) {
+    using namespace agent_api;
+    if (trig_index < 0 || trig_index >= (int)g_triggers.size())
+        return -1;
+    __try {
+        DWORD node = find_eca_ex(g_triggers[trig_index], (DWORD)eca_type, eca_idx, false);
+        if (!node)
+            return -1;
+        return *(DWORD*)(node + 0x13C) ? 1 : 0;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return -1;
+    }
+}
+
 int __cdecl ydt_set_eca_param_value(int trig_index, int eca_type, int eca_idx, int param_idx, const char* value) {
     using namespace agent_api;
     if (trig_index < 0 || trig_index >= (int)g_triggers.size())

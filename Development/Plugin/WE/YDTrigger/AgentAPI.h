@@ -37,6 +37,9 @@ __declspec(dllexport) const char* __cdecl ydt_get_eca_func_name(int trig_index, 
 // Get ECA node GUI ID (CC_GUIID_* value, for internal mapping)
 __declspec(dllexport) int __cdecl ydt_get_eca_gui_id(int trig_index, int eca_type, int eca_idx);
 
+// Returns 1 if active, 0 if inactive, -1 on error.
+__declspec(dllexport) int __cdecl ydt_get_eca_active(int trig_index, int eca_type, int eca_idx);
+
 // --- ECA parameter access ---
 
 // Get number of parameters for an ECA node

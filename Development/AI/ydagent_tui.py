@@ -70,9 +70,9 @@ local triggers = {{
         name = "TUI_Trigger_0",
         disabled = 0,
         ecas = {{
-            [0] = {{ {{ func = "MapInitializationEvent", gui = 100, params = {{}} }} }},
+            [0] = {{ {{ func = "MapInitializationEvent", gui = 100, active = 1, params = {{}} }} }},
             [1] = {{}},
-            [2] = {{ {{ func = "CreateUnit", gui = 200, params = {{ "hfoo", "0", "0" }} }} }},
+            [2] = {{ {{ func = "CreateUnit", gui = 200, active = 1, params = {{ "hfoo", "0", "0" }} }} }},
         }},
     }},
 }}
@@ -91,14 +91,15 @@ _G.YDAGENT_TEST_STUB = {{
     ydt_get_eca_count = function(i, typ) local t = trig(i); local list = t and t.ecas[tonumber(typ) or -1] or nil; return list and #list or 0 end,
     ydt_get_eca_func_name = function(i, typ, e) local node = eca(i, typ, e); return node and node.func or nil end,
     ydt_get_eca_gui_id = function(i, typ, e) local node = eca(i, typ, e); return node and node.gui or -1 end,
+    ydt_get_eca_active = function(i, typ, e) local node = eca(i, typ, e); if not node then return -1 end; if node.active == nil then return 1 end; return node.active end,
     ydt_get_eca_param_count = function(i, typ, e) local node = eca(i, typ, e); return node and #node.params or 0 end,
     ydt_get_eca_param_value = function(i, typ, e, p) local node = eca(i, typ, e); return node and node.params[(tonumber(p) or -1) + 1] or nil end,
     ydt_set_trigger_name = function(i, name) local t = trig(i); if not t then return 0 end; t.name = tostring(name or ""); return 1 end,
     ydt_set_trigger_disabled = function(i, disabled) local t = trig(i); if not t then return 0 end; t.disabled = tonumber(disabled) or 0; return 1 end,
     ydt_set_eca_func_name = function(i, typ, e, name) local node = eca(i, typ, e); if not node then return 0 end; node.func = tostring(name or ""); return 1 end,
-    ydt_set_eca_active = function() return 1 end,
+    ydt_set_eca_active = function(i, typ, e, active) local node = eca(i, typ, e); if not node then return 0 end; node.active = tonumber(active) or 0; return 1 end,
     ydt_set_eca_param_value = function(i, typ, e, p, value) local node = eca(i, typ, e); if not node then return 0 end; node.params[(tonumber(p) or -1) + 1] = tostring(value or ""); return 1 end,
-    ydt_add_eca = function(i, typ) local t = trig(i); if not t then return 0 end; local key = tonumber(typ) or 2; t.ecas[key] = t.ecas[key] or {{}}; t.ecas[key][#t.ecas[key] + 1] = {{ func = "TuiAddedEca", gui = 300, params = {{}} }}; return 1 end,
+    ydt_add_eca = function(i, typ) local t = trig(i); if not t then return 0 end; local key = tonumber(typ) or 2; t.ecas[key] = t.ecas[key] or {{}}; t.ecas[key][#t.ecas[key] + 1] = {{ func = "TuiAddedEca", gui = 300, active = 1, params = {{}} }}; return 1 end,
     ydt_remove_eca = function(i, typ, e) local t = trig(i); local list = t and t.ecas[tonumber(typ) or -1] or nil; local idx = (tonumber(e) or -1) + 1; if not list or not list[idx] then return 0 end; table.remove(list, idx); return 1 end,
     ydt_create_trigger = function(name) triggers[#triggers + 1] = {{ name = tostring(name or "TUI_New_Trigger"), disabled = 0, ecas = {{ [0] = {{}}, [1] = {{}}, [2] = {{}} }} }}; return #triggers end,
     ydt_delete_trigger = function(i) local idx = (tonumber(i) or -1) + 1; if not triggers[idx] then return 0 end; table.remove(triggers, idx); return 1 end,
@@ -217,6 +218,24 @@ def run_rpc_suite(host: str, port: int, restore: bool, tui: Tui) -> None:
             tui,
         )
         require(got_func == func_name, f"eca func {label} mismatch: {got_func!r}")
+        set_inactive = expect(
+            f"agent.set_eca_active {label} false",
+            lambda eca_type=eca_type, new_index=new_index: rpc_call(host, port, "agent.set_eca_active", [0, eca_type, new_index, False]),
+            tui,
+        )
+        require(set_inactive is True, f"set_eca_active false {label} failed: {set_inactive!r}")
+        got_inactive = expect(
+            f"agent.eca_active {label} false",
+            lambda eca_type=eca_type, new_index=new_index: rpc_call(host, port, "agent.eca_active", [0, eca_type, new_index]),
+            tui,
+        )
+        require(got_inactive is False, f"eca active false {label} mismatch: {got_inactive!r}")
+        set_active = expect(
+            f"agent.set_eca_active {label} true",
+            lambda eca_type=eca_type, new_index=new_index: rpc_call(host, port, "agent.set_eca_active", [0, eca_type, new_index, True]),
+            tui,
+        )
+        require(set_active is True, f"set_eca_active true {label} failed: {set_active!r}")
         param_value = f"{label}_param"
         set_param = expect(
             f"agent.set_eca_param_value {label}",
@@ -355,6 +374,41 @@ def run_rpc_suite(host: str, port: int, restore: bool, tui: Tui) -> None:
         eca_after_rollback == eca_before_rollback,
         f"action eca count was not restored: before={eca_before_rollback!r} after={eca_after_rollback!r}",
     )
+    active_before_rollback = expect(
+        "agent.eca_active action before active rollback",
+        lambda: rpc_call(host, port, "agent.eca_active", [0, 2, 0]),
+        tui,
+    )
+    require(active_before_rollback is True, f"unexpected initial action active state: {active_before_rollback!r}")
+    active_rollback = expect(
+        "ai.apply_plan eca active rollback",
+        lambda: rpc_call(
+            host,
+            port,
+            "ai.apply_plan",
+            [
+                {
+                    "operations": [
+                        {"op": "set_eca_active", "trigger_index": 0, "eca_type": 2, "eca_index": 0, "active": False},
+                        {"op": "set_trigger_name", "trigger_index": 999, "name": "MissingTrigger"},
+                    ]
+                },
+                {"dry_run": False, "confirm": True},
+            ],
+        ),
+        tui,
+    )
+    require(isinstance(active_rollback, dict), "active rollback result is not an object")
+    require(active_rollback.get("ok") is False, f"active rollback scenario should fail: {active_rollback!r}")
+    require(isinstance(active_rollback.get("rollback_results"), list), f"active rollback results missing: {active_rollback!r}")
+    require(len(active_rollback["rollback_results"]) == 1, f"unexpected active rollback count: {active_rollback!r}")
+    require(active_rollback["rollback_results"][0].get("ok") is True, f"active rollback failed: {active_rollback!r}")
+    active_after_rollback = expect(
+        "agent.eca_active action after active rollback",
+        lambda: rpc_call(host, port, "agent.eca_active", [0, 2, 0]),
+        tui,
+    )
+    require(active_after_rollback is True, f"action active state was not restored: {active_after_rollback!r}")
 
     if globals_:
         global_write = expect("agent.set_global_value rejects unsafe write", lambda: rpc_call(host, port, "agent.set_global_value", [0, "99"]), tui)

@@ -73,6 +73,7 @@ ffi.cdef[[
     int  ydt_get_eca_count(int trig_index, int eca_type);
     const char* ydt_get_eca_func_name(int trig_index, int eca_type, int eca_idx);
     int  ydt_get_eca_gui_id(int trig_index, int eca_type, int eca_idx);
+    int  ydt_get_eca_active(int trig_index, int eca_type, int eca_idx);
     int  ydt_get_eca_param_count(int trig_index, int eca_type, int eca_idx);
     const char* ydt_get_eca_param_value(int trig_index, int eca_type, int eca_idx, int param_idx);
     int  ydt_set_trigger_name(int trig_index, const char* name);
@@ -1431,6 +1432,16 @@ function agent.eca_gui_id(idx, eca_type, eca_i)
     return r >= 0 and r or nil
 end
 
+function agent.eca_active(idx, eca_type, eca_i)
+    local ok, r = pcall(function()
+        return YDT.ydt_get_eca_active(idx, eca_type, eca_i)
+    end)
+    if ok and r and r >= 0 then
+        return r ~= 0
+    end
+    return nil
+end
+
 function agent.eca_param_count(idx, eca_type, eca_i)
     return tonumber(YDT.ydt_get_eca_param_count(idx, eca_type, eca_i))
 end
@@ -2267,6 +2278,7 @@ local function snapshot_operation(op, options)
             trigger_index = op.trigger_index,
             eca_type = op.eca_type,
             eca_index = op.eca_index,
+            before = agent.eca_active(op.trigger_index, op.eca_type, op.eca_index),
             after = op.active,
         }
     elseif op.op == "set_eca_param_value" then
@@ -2339,7 +2351,8 @@ local function revert_operation(op, snapshot, options)
         if snapshot.before == nil then return false end
         return agent.set_eca_func_name(op.trigger_index, op.eca_type, op.eca_index, snapshot.before)
     elseif op.op == "set_eca_active" then
-        return agent.set_eca_active(op.trigger_index, op.eca_type, op.eca_index, true)
+        if snapshot.before == nil then return false end
+        return agent.set_eca_active(op.trigger_index, op.eca_type, op.eca_index, snapshot.before)
     elseif op.op == "set_eca_param_value" then
         if snapshot.before == nil then return false end
         return agent.set_eca_param_value(op.trigger_index, op.eca_type, op.eca_index, op.param_index, snapshot.before)
@@ -2378,6 +2391,9 @@ local function verify_operation(op, before)
     elseif op.op == "set_eca_param_value" then
         local after = agent.eca_param_value(op.trigger_index, op.eca_type, op.eca_index, op.param_index)
         return after == op.value, after
+    elseif op.op == "set_eca_active" then
+        local after = agent.eca_active(op.trigger_index, op.eca_type, op.eca_index)
+        return after == op.active, after
     elseif op.op == "add_eca" then
         local after = agent.eca_count(op.trigger_index, op.eca_type) or 0
         return after == ((before and before.before or 0) + 1), after
