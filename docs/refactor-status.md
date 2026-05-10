@@ -275,33 +275,31 @@ This mutates one scalar global, verifies readback, then restores the original
 value in the same session. Normal `.w3x` sessions auto-save between write and
 verify; LNI marker sessions use the live file-backed path.
 
-### 9. Live Regression Harness
+### 9. Internal Usable Regression
 
-Use this as the default operator-facing regression entry once a target map is
-open in the refactor debug editor:
-
-```powershell
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x
-```
-
-The harness verifies `editor.current_map_path`, runs `editor.save_map`, writes
-and restores `udg_compose_count`, and returns nonzero on failure.
-
-It can also launch `YDWE.exe` itself when no Agent is already running, but this
-is currently only a launch-path check. For scalar/pending regression, prefer
-`--no-launch` after the target map is visible in the editor:
+The current internal-usable baseline can self-launch YDWE, validate a copied
+test map, and close the launched session:
 
 ```powershell
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --close-launched
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --map Q:\AppData\ydwe\work\internal_usable_self_launch.w3x --internal-usable --close-launched --wait 60
 ```
 
-If an Agent is already listening, the launch mode fails before opening another
-editor process. Use `--no-launch` for the current session.
+Use a copied map path for this command. It mutates and restores data, but using
+a copy keeps validation isolated from active development work.
 
-Broader P1/P2 regression:
+For an already-open editor session, use:
 
 ```powershell
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --internal-usable
+```
+
+If an Agent is already listening, launch mode fails before opening another
+editor process. Use `--no-launch` for the current session.
+
+Minimal smoke remains available:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x
 ```
 
 ## Verified Results
@@ -361,6 +359,10 @@ Verified in real YDWE sessions:
 - `ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\internal_usable_numeric.w3x --internal-usable`
   completed after adding numeric object-field coverage; it additionally mutated,
   saved, verified, and restored ability numeric field `achd`
+- `ydagent_live_regression.py --map Q:\AppData\ydwe\work\internal_usable_self_launch.w3x --internal-usable --close-launched --wait 60`
+  completed without manual editor setup; it launched YDWE, ran the full
+  internal-usable profile, closed the launched session, and left no pending
+  sidecars behind
 
 Concrete evidence from the 2026-05-09 validation pass:
 
@@ -435,9 +437,8 @@ Verified behavior of the final GUI-only compose demo:
 
 - editor automation is environment-sensitive
 - tests must start from `YDWE.exe`
-- cold self-launch can bring the Agent online before native trigger/global
-  capture is ready; use `ydagent_live_regression.py --no-launch` as the reliable
-  P0 regression path after the target map is visibly loaded
+- cold self-launch is now validated by the internal-usable profile, but it still
+  requires no existing Agent on the target port and should use a copied map
 - generated logs and scratch files must be cleaned after testing
 - LNI marker-map temp scripts now sanitize control bytes before Wave compile
   - this specifically masks the bad `W2L\x01` marker-name leak seen in some
