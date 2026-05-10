@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ydagent_fetch_native_artifact import _verify_ydtrigger
 from ydagent_client import (
     is_lni_marker_path,
     normalize_live_value,
@@ -59,6 +60,10 @@ _OBJECT_TYPE_FILES = {
     "buff": "war3map.w3h",
     "upgrade": "war3map.w3q",
 }
+
+
+def _runtime_ydtrigger_path(ydwe_exe: Path) -> Path:
+    return ydwe_exe.resolve().parent / "plugin" / "YDTrigger.dll"
 
 
 def _assert(cond: bool, message: str) -> None:
@@ -1321,6 +1326,15 @@ def run(args: argparse.Namespace) -> LaunchedSession | None:
 
     if args.no_launch and args.close_launched:
         print("INFO: --close-launched ignored when --no-launch is set")
+
+    if args.check_trigger_structure:
+        try:
+            _verify_ydtrigger(_runtime_ydtrigger_path(args.ydwe_exe))
+        except Exception as exc:
+            raise RegressionError(
+                "runtime YDTrigger.dll does not contain the required Agent "
+                f"exports for trigger-structure validation: {exc}"
+            ) from exc
 
     if not args.no_launch:
         if _agent_is_available(args.host, args.port):

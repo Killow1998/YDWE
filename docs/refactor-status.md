@@ -179,7 +179,10 @@ Verified working:
   sessions. It should be enabled after rebuilding `YDTrigger.dll` with the
   event/condition-safe `ydt_add_eca` fix. The live check covers add ECA,
   function-name edit, active-state edit/restore, parameter edit when parameters
-  exist, remove ECA, and count restore.
+  exist, remove ECA, and count restore. Before launching or attaching to the
+  editor, it verifies the runtime `YDTrigger.dll` exports the required Agent
+  native functions, so an old local DLL fails early instead of saving or
+  partially editing trigger data.
 
 ### GUI-First Proof
 
