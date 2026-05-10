@@ -535,6 +535,29 @@ def _set_object_field(record: dict[str, Any], field_id: str, value: str) -> None
     })
 
 
+def _set_object_numeric_field(record: dict[str, Any], field_id: str, value: int | float) -> None:
+    fields = record.setdefault("fields", {})
+    _assert(isinstance(fields, dict), "object record fields is not a dict")
+    fields[field_id] = value
+
+    details = record.setdefault("field_details", [])
+    _assert(isinstance(details, list), "object record field_details is not a list")
+    for detail in details:
+        if isinstance(detail, dict) and detail.get("id") == field_id:
+            detail["value"] = value
+            if detail.get("type") not in (0, 1, 2):
+                detail["type"] = 0 if isinstance(value, int) else 1
+            return
+    details.append({
+        "id": field_id,
+        "type": 0 if isinstance(value, int) else 1,
+        "level": 0,
+        "data": 0,
+        "terminator": 0,
+        "value": value,
+    })
+
+
 def _pick_string_object_field(records: list[dict[str, Any]]) -> tuple[dict[str, Any], str, str] | None:
     candidates: list[tuple[int, dict[str, Any], str, str]] = []
     preferred = {"unam", "anam", "gnam", "fnam"}
@@ -557,6 +580,23 @@ def _pick_string_object_field(records: list[dict[str, Any]]) -> tuple[dict[str, 
     candidates.sort(key=lambda item: item[0])
     _rank, record, field_id, value = candidates[0]
     return record, field_id, value
+
+
+def _pick_numeric_object_field(records: list[dict[str, Any]]) -> tuple[dict[str, Any], str, int | float] | None:
+    for record in records:
+        fields = record.get("fields")
+        if not isinstance(fields, dict):
+            continue
+        for field_id, value in fields.items():
+            if not isinstance(field_id, str):
+                continue
+            if isinstance(value, bool):
+                continue
+            if isinstance(value, int):
+                return record, field_id, value
+            if isinstance(value, float):
+                return record, field_id, value
+    return None
 
 
 def _run_object_write_regression(
@@ -639,6 +679,85 @@ def _run_object_write_regression(
         raise body_error
 
     print(f"PASS: object_write_restore type={object_type} field={field_id}")
+
+
+def _run_object_numeric_write_regression(
+    host: str,
+    port: int,
+    object_type: str,
+    map_path: str,
+    rpc_timeout: float,
+    save_timeout: float,
+) -> None:
+    original = _decode_object_payload(
+        _rpc(host, port, "object.read", [object_type, map_path], timeout=rpc_timeout),
+        object_type,
+    )
+    picked = _pick_numeric_object_field(_object_records(original))
+    _assert(picked is not None, f"object.numeric_write({object_type}) found no numeric field")
+    target_record, field_id, original_value = picked
+
+    if isinstance(original_value, int):
+        marker: int | float = original_value + 1
+    else:
+        marker = original_value + 1.0
+
+    mutated = json.loads(json.dumps(original, ensure_ascii=False))
+    mutated_record = next((r for r in _object_records(mutated) if r.get("id") == target_record.get("id")), None)
+    _assert(mutated_record is not None, "object numeric target record disappeared during copy")
+
+    restore_errors: list[str] = []
+    body_error: Exception | None = None
+    try:
+        _set_object_numeric_field(mutated_record, field_id, marker)
+        ok = _rpc(
+            host,
+            port,
+            "object.write",
+            [object_type, map_path, json.dumps(mutated, ensure_ascii=False, separators=(",", ":"))],
+            timeout=rpc_timeout,
+        )
+        _assert(ok is True, f"object.write({object_type}) returned {ok!r}")
+        _run_save_map(host, port, save_timeout)
+        time.sleep(2)
+
+        after = _decode_object_payload(
+            _rpc(host, port, "object.read", [object_type, map_path], timeout=rpc_timeout),
+            object_type,
+        )
+        after_record = next((r for r in _object_records(after) if r.get("id") == target_record.get("id")), None)
+        _assert(after_record is not None, "object numeric target record missing after write")
+        _assert(
+            after_record.get("fields", {}).get(field_id) == marker,
+            f"object.numeric_write({object_type}) readback mismatch",
+        )
+    except Exception as exc:
+        body_error = exc
+    finally:
+        try:
+            ok = _rpc(
+                host,
+                port,
+                "object.write",
+                [object_type, map_path, json.dumps(original, ensure_ascii=False, separators=(",", ":"))],
+                timeout=rpc_timeout,
+            )
+            if ok is not True:
+                restore_errors.append(f"object numeric restore write returned {ok!r}")
+            else:
+                _run_save_map(host, port, save_timeout)
+                time.sleep(2)
+        except Exception as exc:
+            restore_errors.append(f"object numeric restore error: {exc}")
+
+    if restore_errors:
+        if body_error is not None:
+            raise RegressionError(f"{body_error}; {'; '.join(restore_errors)}")
+        raise RegressionError("; ".join(restore_errors))
+    if body_error is not None:
+        raise body_error
+
+    print(f"PASS: object_numeric_write_restore type={object_type} field={field_id}")
 
 
 def _run_object_field_map_check(
@@ -772,6 +891,7 @@ def _apply_internal_usable_profile(args: argparse.Namespace) -> None:
     args.check_trigger_rename = True
     args.check_object_read = _append_unique(args.check_object_read, _INTERNAL_USABLE_OBJECTS)
     args.check_object_write = _append_unique(args.check_object_write, _INTERNAL_USABLE_OBJECTS)
+    args.check_object_numeric_write = _append_unique(args.check_object_numeric_write, ["ability"])
     args.check_object_field_map = _append_unique(args.check_object_field_map, ["item", "unit"])
 
 
@@ -1007,6 +1127,18 @@ def run(args: argparse.Namespace) -> LaunchedSession | None:
                 args.save_timeout,
             )
 
+    if args.check_object_numeric_write:
+        map_path = _read_current_map_path(args.host, args.port)
+        for object_type in args.check_object_numeric_write:
+            _run_object_numeric_write_regression(
+                args.host,
+                args.port,
+                object_type,
+                map_path,
+                args.rpc_timeout,
+                args.save_timeout,
+            )
+
     if args.check_object_field_map:
         for object_type in args.check_object_field_map:
             _run_object_field_map_check(
@@ -1077,6 +1209,12 @@ def main() -> int:
         action="append",
         metavar="TYPE",
         help="mutate one string object field, save, verify, and restore; repeatable",
+    )
+    parser.add_argument(
+        "--check-object-numeric-write",
+        action="append",
+        metavar="TYPE",
+        help="mutate one numeric object field, save, verify, and restore; repeatable",
     )
     parser.add_argument(
         "--check-object-field-map",

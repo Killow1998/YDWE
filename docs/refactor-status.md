@@ -56,6 +56,7 @@ working maps without frequent manual rescue.
   - trigger rename/restore
   - object archive read
   - object write/save/readback/restore for at least item, unit, and ability
+  - ability numeric object-field write/save/readback/restore
 - all generated pending sidecars are inspectable from CLI and are cleared after
   successful save/restore
 - failures must be explicit:
@@ -350,6 +351,9 @@ Verified in real YDWE sessions:
   completed as the short-form internal-usable profile; it expands to scalar
   global checks, pending clear, trigger rename, item/unit/ability object
   read/write, and item/unit field-map checks
+- `ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\internal_usable_numeric.w3x --internal-usable`
+  completed after adding numeric object-field coverage; it additionally mutated,
+  saved, verified, and restored ability numeric field `achd`
 
 Concrete evidence from the 2026-05-09 validation pass:
 
@@ -480,8 +484,9 @@ Verified behavior of the final GUI-only compose demo:
 
 - object-editor field metadata lookup, real archive object reads, and staged
   open-editor object writes are now part of live validation
-- next object-editor work is broadening write regression beyond string fields to
-  ability level-data and upgrade fields
+- next object-editor work is broadening write regression beyond the current
+  ability numeric field to explicit level/data-sensitive fields and upgrade
+  fields
 - keep `docs/refactor-status.md` as the only status document
 
 ## Documentation Rule
