@@ -457,6 +457,10 @@ Verified in real YDWE sessions:
 - The same workflow uploads `ydagent-native-debug` with the rebuilt
   `YDTrigger.dll/.pdb` and `YDWE_Test.exe/.pdb`, so a machine without local v143
   can still fetch the validated native DLL for GUI live regression.
+- `ydagent_fetch_native_artifact.py` can download the latest successful
+  `ydagent-native-debug` artifact when `GH_TOKEN` or `GITHUB_TOKEN` is set, and
+  can install the rebuilt `YDTrigger.dll` into the local Debug runtime with a
+  timestamped backup of the previous DLL.
 - `test_object_api.cpp` now contains real-layout roundtrip fixtures for every
   object-editor file type (`w3u`, `w3t`, `w3b`, `w3d`, `w3a`, `w3h`, `w3q`);
   rerun `YDWE_Test` in an environment with MSBuild available
