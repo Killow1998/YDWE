@@ -24,11 +24,14 @@ in the repo. Update this file instead.
 
 ```powershell
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_build_preflight.py --build-ydtrigger --build-tests
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_build_preflight.py --check-runtime-exports
 ```
 
 On the current machine this preflight finds only MSBuild 12.0 and fails with
 `v143 toolset not found`; native source changes are therefore committed but not
-rebuilt into the local `Build/publish/Debug` runtime yet.
+rebuilt into the local `Build/publish/Debug` runtime yet. The runtime export
+check is separate and fails if the local `YDTrigger.dll` is still an old build
+that does not contain the refactor Agent exports.
 
 ### Runtime Baseline
 
@@ -204,11 +207,13 @@ Generation helper:
 
 ```powershell
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_build_preflight.py --build-ydtrigger --build-tests
-MSBuild YDWE.sln /t:Build /p:Configuration=Debug /p:Platform=Win32
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_build_preflight.py --check-runtime-exports
 ```
 
 If the preflight fails, install Visual Studio 2022 Build Tools with the C++
 workload before rerunning native build/live trigger-structure verification.
+Do not treat trigger-structure GUI validation as available until
+`--check-runtime-exports` passes against the local Debug runtime DLL.
 
 ### 2. Launch
 
@@ -449,6 +454,10 @@ Verified in real YDWE sessions:
 - `ydagent_build_preflight.py` now makes the native build prerequisite explicit.
   On this machine it reports only `C:\Program Files (x86)\MSBuild\12.0\Bin\MSBuild.exe`
   and fails because the v143 toolset is not installed.
+- `ydagent_build_preflight.py --check-runtime-exports` checks the local Debug
+  runtime `YDTrigger.dll` directly. On this machine it currently fails because
+  the DLL is an old build missing `ydt_get_eca_active`; this is the active
+  blocker for real GUI trigger-structure validation.
 - `test_object_api.cpp` now contains real-layout roundtrip fixtures for every
   object-editor file type (`w3u`, `w3t`, `w3b`, `w3d`, `w3a`, `w3h`, `w3q`);
   rerun `YDWE_Test` in an environment with MSBuild available
@@ -543,6 +552,8 @@ Verified behavior of the final GUI-only compose demo:
   rebuild before live GUI verification can pass
 - run `ydagent_build_preflight.py --build-ydtrigger --build-tests` before any
   claim that native trigger-structure changes are available in the local runtime
+- run `ydagent_build_preflight.py --check-runtime-exports` after rebuilding to
+  confirm the local runtime DLL actually contains the refactor Agent exports
 - generated logs and scratch files must be cleaned after testing
 - LNI marker-map temp scripts now sanitize control bytes before Wave compile
   - this specifically masks the bad `W2L\x01` marker-name leak seen in some
