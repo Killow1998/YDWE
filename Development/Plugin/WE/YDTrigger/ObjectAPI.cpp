@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <vector>
 #include <string>
+#include <cstring>
 #include <BlizzardStorm.h>
 
 // ObjectAPI: Binary parser for Warcraft III object editor files
@@ -14,6 +15,9 @@ namespace object_api {
 struct ObjField {
     DWORD field_id; // 4-char code like 'unam', 'uabi'
     DWORD type;     // 0=int, 1=real, 2=unreal, 3=string
+    DWORD level;    // ability/doodad/upgrade object files store level/data before value
+    DWORD data_id;
+    DWORD terminator;
     DWORD int_val;  // for type 0
     float real_val; // for type 1/2
     char* str_val;  // for type 3 (on heap)
@@ -28,47 +32,58 @@ struct ObjRecord {
 struct ObjFile {
     DWORD magic;
     DWORD version;
+    bool real_layout;
+    bool has_level;
     std::vector<ObjRecord> original;
     std::vector<ObjRecord> custom;
 };
 
-// Ring buffer for JSON output (shared with AgentAPI)
-static char g_out_buf[65536];
-static int g_out_pos = 0;
+static std::string g_out_buf;
 
 static void buf_write(const char* s, int len) {
-    if (g_out_pos + len + 1 > (int)sizeof(g_out_buf))
-        g_out_pos = 0;
-    memcpy(g_out_buf + g_out_pos, s, len);
-    g_out_pos += len;
-    g_out_buf[g_out_pos] = '\0';
+    if (s && len > 0)
+        g_out_buf.append(s, len);
 }
 
 static const char* buf_str() {
-    return g_out_buf;
+    return g_out_buf.c_str();
 }
 
 static void buf_clear() {
-    g_out_pos = 0;
-    g_out_buf[0] = '\0';
+    g_out_buf.clear();
 }
 
 // -- binary reader helpers --
 
-static DWORD read_u32(const unsigned char*& p) {
-    DWORD v = *(DWORD*)p;
-    p += 4;
-    return v;
+static bool can_read(const unsigned char* p, const unsigned char* end, size_t bytes) {
+    return p <= end && (size_t)(end - p) >= bytes;
 }
 
-static float read_f32(const unsigned char*& p) {
-    float v = *(float*)p;
+static bool read_u32_checked(const unsigned char*& p, const unsigned char* end, DWORD& out) {
+    if (!can_read(p, end, 4))
+        return false;
+    out = (DWORD)p[0] | ((DWORD)p[1] << 8) | ((DWORD)p[2] << 16) | ((DWORD)p[3] << 24);
     p += 4;
-    return v;
+    return true;
+}
+
+static bool read_f32_checked(const unsigned char*& p, const unsigned char* end, float& out) {
+    if (!can_read(p, end, 4))
+        return false;
+    DWORD bits;
+    if (!read_u32_checked(p, end, bits))
+        return false;
+    memcpy(&out, &bits, sizeof(float));
+    return true;
 }
 
 static DWORD make_id(const char* s) {
-    return (*(DWORD*)s);
+    DWORD v = 0;
+    if (!s)
+        return 0;
+    for (int i = 0; i < 4 && s[i]; ++i)
+        v |= ((DWORD)(unsigned char)s[i]) << (i * 8);
+    return v;
 }
 
 static void id_to_str(DWORD id, char* out) {
@@ -83,6 +98,162 @@ static void id_to_str(DWORD id, char* out) {
     out[len] = '\0';
 }
 
+static bool looks_like_legacy_magic(DWORD value) {
+    char id[5];
+    id_to_str(value, id);
+    return id[0] == 'W' && id[1] == '3';
+}
+
+static bool has_level_for_path(const char* file_path) {
+    if (!file_path)
+        return false;
+    const char* dot = strrchr(file_path, '.');
+    if (!dot)
+        return false;
+    return !_stricmp(dot, ".w3a") || !_stricmp(dot, ".w3d") || !_stricmp(dot, ".w3q");
+}
+
+static char* heap_copy(const char* data, size_t len) {
+    char* out = (char*)HeapAlloc(GetProcessHeap(), 0, len + 1);
+    if (!out)
+        return nullptr;
+    if (len > 0)
+        memcpy(out, data, len);
+    out[len] = '\0';
+    return out;
+}
+
+static bool read_zero_string(const unsigned char*& p, const unsigned char* end, char*& out, bool align_four) {
+    const unsigned char* start = p;
+    while (p < end && *p != 0)
+        ++p;
+    if (p >= end)
+        return false;
+    size_t len = (size_t)(p - start);
+    size_t skip = align_four ? ((((len + 1u) + 3u) & ~3u) - len) : 1u;
+    if (!can_read(p, end, skip))
+        return false;
+    out = heap_copy((const char*)start, len);
+    if (!out)
+        return false;
+    p += skip;
+    return out != nullptr;
+}
+
+static bool read_field(const unsigned char*& p, const unsigned char* end, bool is_real_layout, bool has_level, ObjField& f) {
+    if (!read_u32_checked(p, end, f.field_id) || !read_u32_checked(p, end, f.type))
+        return false;
+    f.level = 0;
+    f.data_id = 0;
+    f.terminator = 0;
+    f.int_val = 0;
+    f.real_val = 0.0f;
+    f.str_val = nullptr;
+
+    if (has_level) {
+        if (!read_u32_checked(p, end, f.level) || !read_u32_checked(p, end, f.data_id))
+            return false;
+    }
+
+    switch (f.type) {
+    case 0:
+        if (!read_u32_checked(p, end, f.int_val))
+            return false;
+        if (is_real_layout)
+            if (!read_u32_checked(p, end, f.terminator))
+                return false;
+        return true;
+    case 1:
+        if (!read_f32_checked(p, end, f.real_val))
+            return false;
+        if (is_real_layout)
+            return read_u32_checked(p, end, f.terminator);
+        return true;
+    case 2:
+        if (!read_f32_checked(p, end, f.real_val))
+            return false;
+        if (is_real_layout)
+            return read_u32_checked(p, end, f.terminator);
+        return read_u32_checked(p, end, f.terminator); // legacy unreal includes padding
+    case 3:
+        if (!read_zero_string(p, end, f.str_val, !is_real_layout))
+            return false;
+        if (!is_real_layout)
+            return true;
+        if (!read_u32_checked(p, end, f.terminator))
+            return false;
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool read_chunk(
+    const unsigned char*& p,
+    const unsigned char* end,
+    bool is_real_layout,
+    bool custom,
+    bool has_level,
+    std::vector<ObjRecord>& out
+) {
+    DWORD count = 0;
+    if (!read_u32_checked(p, end, count) || count > 100000)
+        return false;
+    for (DWORD i = 0; i < count; ++i) {
+        DWORD obj_id = 0;
+        DWORD base_id = 0;
+        DWORD mod_count = 0;
+        if (is_real_layout) {
+            DWORD parent = 0;
+            DWORD name = 0;
+            if (!read_u32_checked(p, end, parent) || !read_u32_checked(p, end, name) || !read_u32_checked(p, end, mod_count))
+                return false;
+            obj_id = name == 0 ? parent : name;
+            base_id = custom ? parent : 0;
+        } else {
+            if (!read_u32_checked(p, end, obj_id))
+                return false;
+            if (custom && !read_u32_checked(p, end, base_id))
+                return false;
+            if (!read_u32_checked(p, end, mod_count))
+                return false;
+            if (!custom)
+                base_id = 0;
+        }
+        if (mod_count > 100000)
+            return false;
+
+        ObjRecord rec;
+        rec.obj_id = obj_id;
+        rec.base_id = base_id;
+        for (DWORD j = 0; j < mod_count; ++j) {
+            ObjField f;
+            if (!read_field(p, end, is_real_layout, has_level, f))
+                return false;
+            rec.fields.push_back(f);
+        }
+        out.push_back(rec);
+    }
+    return true;
+}
+
+static bool parse_real_obj_data(const unsigned char* data, DWORD size, bool has_level, ObjFile& file) {
+    const unsigned char* p = data;
+    const unsigned char* end = data + size;
+    DWORD version = 0;
+    if (!read_u32_checked(p, end, version))
+        return false;
+    file.magic = 0;
+    file.version = version;
+    file.real_layout = true;
+    file.has_level = has_level;
+    if (!read_chunk(p, end, true, false, has_level, file.original))
+        return false;
+    if (!read_chunk(p, end, true, true, has_level, file.custom))
+        return false;
+    return p <= end;
+}
+
 // Parse binary object data into ObjFile
 static bool parse_obj_data(const unsigned char* data, DWORD size, ObjFile& file) {
     if (size < 8)
@@ -90,145 +261,14 @@ static bool parse_obj_data(const unsigned char* data, DWORD size, ObjFile& file)
     const unsigned char* p = data;
     const unsigned char* end = data + size;
 
-    file.magic = read_u32(p);
-    file.version = read_u32(p);
-
-    // Original objects
-    if (p + 4 > end)
+    if (!read_u32_checked(p, end, file.magic) || !read_u32_checked(p, end, file.version))
         return false;
-    DWORD orig_count = read_u32(p);
-    for (DWORD i = 0; i < orig_count; i++) {
-        if (p + 8 > end)
-            return false;
-        ObjRecord rec;
-        rec.obj_id = read_u32(p);
-        rec.base_id = 0;
-        DWORD mod_count = read_u32(p);
-        if (mod_count > 512)
-            return false; // safety: no object has 500+ modifications
-
-        for (DWORD j = 0; j < mod_count; j++) {
-            if (p + 8 > end)
-                return false;
-            ObjField f;
-            f.field_id = read_u32(p);
-            f.type = read_u32(p);
-            f.int_val = 0;
-            f.real_val = 0.0f;
-            f.str_val = nullptr;
-
-            switch (f.type) {
-            case 0: // int
-                if (p + 4 > end)
-                    return false;
-                f.int_val = (int)read_u32(p);
-                break;
-            case 1: // real
-                if (p + 4 > end)
-                    return false;
-                f.real_val = read_f32(p);
-                break;
-            case 2: // unreal (real + 4 bytes padding)
-                if (p + 8 > end)
-                    return false;
-                f.real_val = read_f32(p);
-                p += 4; // skip padding
-                break;
-            case 3: { // string (null-terminated, padded to 4)
-                const char* str_start = (const char*)p;
-                int str_len = 0;
-                while (p < end && *(const char*)p) {
-                    p++;
-                    str_len++;
-                }
-                if (p >= end)
-                    return false;
-                p++;                                 // skip null
-                int padded = (str_len + 1 + 3) & ~3; // 4-byte align
-                p += padded - (str_len + 1);
-                f.str_val = (char*)HeapAlloc(GetProcessHeap(), 0, str_len + 1);
-                if (f.str_val) {
-                    memcpy(f.str_val, str_start, str_len);
-                    f.str_val[str_len] = '\0';
-                }
-                break;
-            }
-            default:
-                return false;
-            }
-            rec.fields.push_back(f);
-        }
-        file.original.push_back(rec);
-    }
-
-    // Custom objects
-    if (p + 4 > end)
+    file.real_layout = false;
+    file.has_level = false;
+    if (!read_chunk(p, end, false, false, false, file.original))
         return false;
-    DWORD cust_count = read_u32(p);
-    for (DWORD i = 0; i < cust_count; i++) {
-        if (p + 12 > end)
-            return false;
-        ObjRecord rec;
-        rec.obj_id = read_u32(p);
-        rec.base_id = read_u32(p);
-        DWORD mod_count = read_u32(p);
-        if (mod_count > 512)
-            return false; // safety: no object has 500+ modifications
-
-        for (DWORD j = 0; j < mod_count; j++) {
-            if (p + 8 > end)
-                return false;
-            ObjField f;
-            f.field_id = read_u32(p);
-            f.type = read_u32(p);
-            f.int_val = 0;
-            f.real_val = 0.0f;
-            f.str_val = nullptr;
-
-            switch (f.type) {
-            case 0:
-                if (p + 4 > end)
-                    return false;
-                f.int_val = (int)read_u32(p);
-                break;
-            case 1:
-                if (p + 4 > end)
-                    return false;
-                f.real_val = read_f32(p);
-                break;
-            case 2:
-                if (p + 8 > end)
-                    return false;
-                f.real_val = read_f32(p);
-                p += 4;
-                break;
-            case 3: {
-                const char* str_start = (const char*)p;
-                int str_len = 0;
-                while (p < end && *(const char*)p) {
-                    p++;
-                    str_len++;
-                }
-                if (p >= end)
-                    return false;
-                p++;
-                int padded = (str_len + 1 + 3) & ~3;
-                p += padded - (str_len + 1);
-                f.str_val = (char*)HeapAlloc(GetProcessHeap(), 0, str_len + 1);
-                if (f.str_val) {
-                    memcpy(f.str_val, str_start, str_len);
-                    f.str_val[str_len] = '\0';
-                }
-                break;
-            }
-            default:
-                return false;
-            }
-            rec.fields.push_back(f);
-        }
-        file.custom.push_back(rec);
-    }
-
+    if (!read_chunk(p, end, false, true, false, file.custom))
+        return false;
     return true;
 }
 
@@ -282,6 +322,59 @@ static void json_append_str(const char* s) {
     buf_write("\"", 1);
 }
 
+static void json_append_field_scalar(ObjField& f) {
+    char num[64];
+    int nlen = 0;
+    switch (f.type) {
+    case 0:
+        nlen = BLZSStrPrintf(num, 64, "%d", f.int_val);
+        buf_write(num, nlen);
+        break;
+    case 1:
+    case 2:
+        nlen = BLZSStrPrintf(num, 64, "%.6g", f.real_val);
+        buf_write(num, nlen);
+        break;
+    case 3:
+        json_append_str(f.str_val ? f.str_val : "");
+        break;
+    default:
+        buf_write("null", 4);
+        break;
+    }
+}
+
+static void json_append_field_details(std::vector<ObjField>& fields) {
+    char id[5];
+    char num[64];
+
+    buf_write(",\"field_details\":[", 18);
+    for (size_t i = 0; i < fields.size(); ++i) {
+        if (i > 0)
+            buf_write(",", 1);
+        auto& f = fields[i];
+        id_to_str(f.field_id, id);
+        buf_write("{\"id\":\"", 7);
+        buf_write(id, (int)BLZSStrLen(id));
+        buf_write("\",\"type\":", 9);
+        int nlen = BLZSStrPrintf(num, 64, "%u", f.type);
+        buf_write(num, nlen);
+        buf_write(",\"level\":", 9);
+        nlen = BLZSStrPrintf(num, 64, "%u", f.level);
+        buf_write(num, nlen);
+        buf_write(",\"data\":", 8);
+        nlen = BLZSStrPrintf(num, 64, "%u", f.data_id);
+        buf_write(num, nlen);
+        buf_write(",\"terminator\":", 14);
+        nlen = BLZSStrPrintf(num, 64, "%u", f.terminator);
+        buf_write(num, nlen);
+        buf_write(",\"value\":", 9);
+        json_append_field_scalar(f);
+        buf_write("}", 1);
+    }
+    buf_write("]", 1);
+}
+
 // Convert ObjFile to JSON string
 static const char* objfile_to_json(ObjFile& file) {
     buf_clear();
@@ -321,24 +414,12 @@ static const char* objfile_to_json(ObjFile& file) {
             buf_write(id, (int)BLZSStrLen(id));
             buf_write("\":", 2);
 
-            switch (f.type) {
-            case 0:
-                nlen = BLZSStrPrintf(num, 32, "%d", f.int_val);
-                buf_write(num, nlen);
-                break;
-            case 1:
-            case 2: {
-                char rbuf[64];
-                nlen = BLZSStrPrintf(rbuf, 64, "%.6g", f.real_val);
-                buf_write(rbuf, nlen);
-                break;
-            }
-            case 3:
-                json_append_str(f.str_val ? f.str_val : "");
-                break;
-            }
+            json_append_field_scalar(f);
         }
-        buf_write("}}", 2); // close fields and object
+        buf_write("}", 1); // close fields
+        if (file.real_layout)
+            json_append_field_details(fields);
+        buf_write("}", 1);
     }
     buf_write("]", 1);
 
@@ -369,24 +450,12 @@ static const char* objfile_to_json(ObjFile& file) {
             buf_write(id, (int)BLZSStrLen(id));
             buf_write("\":", 2);
 
-            switch (f.type) {
-            case 0:
-                nlen = BLZSStrPrintf(num, 32, "%d", f.int_val);
-                buf_write(num, nlen);
-                break;
-            case 1:
-            case 2: {
-                char rbuf[64];
-                nlen = BLZSStrPrintf(rbuf, 64, "%.6g", f.real_val);
-                buf_write(rbuf, nlen);
-                break;
-            }
-            case 3:
-                json_append_str(f.str_val ? f.str_val : "");
-                break;
-            }
+            json_append_field_scalar(f);
         }
-        buf_write("}}", 2);
+        buf_write("}", 1);
+        if (file.real_layout)
+            json_append_field_details(fields);
+        buf_write("}", 1);
     }
     buf_write("]", 1);
 
@@ -566,6 +635,134 @@ static JsonVal* obj_get(JsonVal* obj, const char* key) {
     return nullptr;
 }
 
+static char* heap_dup_json_str(const char* s) {
+    if (!s)
+        s = "";
+    size_t len = BLZSStrLen(s);
+    char* out = (char*)HeapAlloc(GetProcessHeap(), 0, len + 1);
+    if (out)
+        BLZSStrCopy(out, s, len + 1);
+    return out;
+}
+
+static bool fill_field_value(ObjField& f, JsonVal* fv, DWORD forced_type, bool has_forced_type) {
+    if (!fv)
+        return false;
+
+    f.type = has_forced_type ? forced_type : 0;
+    f.int_val = 0;
+    f.real_val = 0.0f;
+    f.str_val = nullptr;
+
+    if (has_forced_type) {
+        switch (forced_type) {
+        case 0:
+            if (fv->kind == JsonVal::NUM)
+                f.int_val = (DWORD)fv->data.n;
+            else if (fv->kind == JsonVal::BOOL)
+                f.int_val = fv->data.b ? 1 : 0;
+            else
+                return false;
+            return true;
+        case 1:
+        case 2:
+            if (fv->kind != JsonVal::NUM)
+                return false;
+            f.real_val = (float)fv->data.n;
+            return true;
+        case 3:
+            if (fv->kind == JsonVal::STR)
+                f.str_val = heap_dup_json_str(fv->data.s);
+            else if (fv->kind == JsonVal::NUL)
+                f.str_val = heap_dup_json_str("");
+            else
+                return false;
+            return f.str_val != nullptr;
+        default:
+            return false;
+        }
+    }
+
+    switch (fv->kind) {
+    case JsonVal::NUM:
+        if (fv->data.n == (int)fv->data.n) {
+            f.type = 0;
+            f.int_val = (DWORD)fv->data.n;
+        } else {
+            f.type = 1;
+            f.real_val = (float)fv->data.n;
+        }
+        return true;
+    case JsonVal::STR:
+        f.type = 3;
+        f.str_val = heap_dup_json_str(fv->data.s);
+        return f.str_val != nullptr;
+    case JsonVal::BOOL:
+        f.type = 0;
+        f.int_val = fv->data.b ? 1 : 0;
+        return true;
+    case JsonVal::NUL:
+        f.type = 3;
+        f.str_val = heap_dup_json_str("");
+        return f.str_val != nullptr;
+    default:
+        return false;
+    }
+}
+
+static bool field_from_detail(JsonVal* detail_v, ObjField& f) {
+    if (!detail_v || detail_v->kind != JsonVal::OBJECT)
+        return false;
+
+    JsonVal* id_v = obj_get(detail_v, "id");
+    JsonVal* type_v = obj_get(detail_v, "type");
+    JsonVal* value_v = obj_get(detail_v, "value");
+    if (!id_v || id_v->kind != JsonVal::STR || !type_v || type_v->kind != JsonVal::NUM)
+        return false;
+
+    f.field_id = make_id(id_v->data.s);
+    f.level = 0;
+    f.data_id = 0;
+    f.terminator = 0;
+
+    JsonVal* level_v = obj_get(detail_v, "level");
+    JsonVal* data_v = obj_get(detail_v, "data");
+    JsonVal* terminator_v = obj_get(detail_v, "terminator");
+    if (level_v && level_v->kind == JsonVal::NUM)
+        f.level = (DWORD)level_v->data.n;
+    if (data_v && data_v->kind == JsonVal::NUM)
+        f.data_id = (DWORD)data_v->data.n;
+    if (terminator_v && terminator_v->kind == JsonVal::NUM)
+        f.terminator = (DWORD)terminator_v->data.n;
+
+    return fill_field_value(f, value_v, (DWORD)type_v->data.n, true);
+}
+
+static void read_fields_from_json(JsonVal* obj_v, ObjRecord& rec) {
+    JsonVal* details_v = obj_get(obj_v, "field_details");
+    if (details_v && details_v->kind == JsonVal::ARRAY) {
+        for (auto* detail : details_v->arr) {
+            ObjField f;
+            if (field_from_detail(detail, f))
+                rec.fields.push_back(f);
+        }
+        return;
+    }
+
+    JsonVal* fields_v = obj_get(obj_v, "fields");
+    if (!fields_v || fields_v->kind != JsonVal::OBJECT)
+        return;
+    for (auto& kv : fields_v->obj) {
+        ObjField f;
+        f.field_id = make_id(kv.first);
+        f.level = 0;
+        f.data_id = 0;
+        f.terminator = 0;
+        if (fill_field_value(f, kv.second, 0, false))
+            rec.fields.push_back(f);
+    }
+}
+
 // Encode ObjFile back to binary. Returns NULL on failure.
 static std::vector<unsigned char> objfile_to_binary(ObjFile& file) {
     std::vector<unsigned char> out;
@@ -576,6 +773,61 @@ static std::vector<unsigned char> objfile_to_binary(ObjFile& file) {
         out.push_back((unsigned char)((v >> 16) & 0xFF));
         out.push_back((unsigned char)((v >> 24) & 0xFF));
     };
+
+    if (file.real_layout) {
+        auto wstr = [&](const char* s) {
+            if (!s)
+                s = "";
+            for (const char* p = s; *p; ++p)
+                out.push_back((unsigned char)*p);
+            out.push_back(0);
+        };
+        auto write_field = [&](ObjField& f) {
+            w32(f.field_id);
+            w32(f.type);
+            if (file.has_level) {
+                w32(f.level);
+                w32(f.data_id);
+            }
+            switch (f.type) {
+            case 0:
+                w32((DWORD)f.int_val);
+                break;
+            case 1:
+            case 2: {
+                DWORD v = *(DWORD*)&f.real_val;
+                w32(v);
+                break;
+            }
+            case 3:
+                wstr(f.str_val);
+                break;
+            default:
+                break;
+            }
+            w32(f.terminator);
+        };
+        auto write_chunk = [&](std::vector<ObjRecord>& chunk, bool custom) {
+            w32((DWORD)chunk.size());
+            for (auto& rec : chunk) {
+                if (custom) {
+                    w32(rec.base_id);
+                    w32(rec.obj_id);
+                } else {
+                    w32(rec.obj_id);
+                    w32(0);
+                }
+                w32((DWORD)rec.fields.size());
+                for (auto& f : rec.fields)
+                    write_field(f);
+            }
+        };
+
+        w32(file.version);
+        write_chunk(file.original, false);
+        write_chunk(file.custom, true);
+        return out;
+    }
 
     w32(file.magic);
     w32(file.version);
@@ -678,6 +930,8 @@ static bool json_to_objfile(const char* json, ObjFile& file) {
     }
     file.magic = make_id(magic_v->data.s);
     file.version = (DWORD)version_v->data.n;
+    file.real_layout = false;
+    file.has_level = false;
 
     // Read original objects
     JsonVal* orig = obj_get(root, "original");
@@ -686,53 +940,14 @@ static bool json_to_objfile(const char* json, ObjFile& file) {
             if (obj_v->kind != JsonVal::OBJECT)
                 continue;
             ObjRecord rec;
+            rec.obj_id = 0;
+            rec.base_id = 0;
             JsonVal* id_v = obj_get(obj_v, "id");
             if (id_v && id_v->kind == JsonVal::STR)
                 rec.obj_id = make_id(id_v->data.s);
             rec.base_id = 0;
 
-            JsonVal* fields_v = obj_get(obj_v, "fields");
-            if (fields_v && fields_v->kind == JsonVal::OBJECT) {
-                for (auto& kv : fields_v->obj) {
-                    ObjField f;
-                    f.field_id = make_id(kv.first);
-                    f.str_val = nullptr;
-                    f.int_val = 0;
-                    f.real_val = 0.0f;
-
-                    auto* fv = kv.second;
-                    switch (fv->kind) {
-                    case JsonVal::NUM:
-                        if (fv->data.n == (int)fv->data.n) {
-                            f.type = 0;
-                            f.int_val = (int)fv->data.n;
-                        } else {
-                            f.type = 1;
-                            f.real_val = (float)fv->data.n;
-                        }
-                        break;
-                    case JsonVal::STR:
-                        f.type = 3;
-                        f.str_val = (char*)HeapAlloc(GetProcessHeap(), 0, BLZSStrLen(fv->data.s) + 1);
-                        if (f.str_val)
-                            BLZSStrCopy(f.str_val, fv->data.s, BLZSStrLen(fv->data.s) + 1);
-                        break;
-                    case JsonVal::BOOL:
-                        f.type = 0;
-                        f.int_val = fv->data.b ? 1 : 0;
-                        break;
-                    case JsonVal::NUL:
-                        f.type = 3;
-                        f.str_val = (char*)HeapAlloc(GetProcessHeap(), 0, 1);
-                        if (f.str_val)
-                            f.str_val[0] = '\0';
-                        break;
-                    default:
-                        continue; // skip arrays/objects
-                    }
-                    rec.fields.push_back(f);
-                }
-            }
+            read_fields_from_json(obj_v, rec);
             file.original.push_back(rec);
         }
     }
@@ -744,6 +959,8 @@ static bool json_to_objfile(const char* json, ObjFile& file) {
             if (obj_v->kind != JsonVal::OBJECT)
                 continue;
             ObjRecord rec;
+            rec.obj_id = 0;
+            rec.base_id = 0;
             JsonVal* id_v = obj_get(obj_v, "id");
             JsonVal* base_v = obj_get(obj_v, "base");
             if (id_v && id_v->kind == JsonVal::STR)
@@ -751,48 +968,7 @@ static bool json_to_objfile(const char* json, ObjFile& file) {
             if (base_v && base_v->kind == JsonVal::STR)
                 rec.base_id = make_id(base_v->data.s);
 
-            JsonVal* fields_v = obj_get(obj_v, "fields");
-            if (fields_v && fields_v->kind == JsonVal::OBJECT) {
-                for (auto& kv : fields_v->obj) {
-                    ObjField f;
-                    f.field_id = make_id(kv.first);
-                    f.str_val = nullptr;
-                    f.int_val = 0;
-                    f.real_val = 0.0f;
-
-                    auto* fv = kv.second;
-                    switch (fv->kind) {
-                    case JsonVal::NUM:
-                        if (fv->data.n == (int)fv->data.n) {
-                            f.type = 0;
-                            f.int_val = (int)fv->data.n;
-                        } else {
-                            f.type = 1;
-                            f.real_val = (float)fv->data.n;
-                        }
-                        break;
-                    case JsonVal::STR:
-                        f.type = 3;
-                        f.str_val = (char*)HeapAlloc(GetProcessHeap(), 0, BLZSStrLen(fv->data.s) + 1);
-                        if (f.str_val)
-                            BLZSStrCopy(f.str_val, fv->data.s, BLZSStrLen(fv->data.s) + 1);
-                        break;
-                    case JsonVal::BOOL:
-                        f.type = 0;
-                        f.int_val = fv->data.b ? 1 : 0;
-                        break;
-                    case JsonVal::NUL:
-                        f.type = 3;
-                        f.str_val = (char*)HeapAlloc(GetProcessHeap(), 0, 1);
-                        if (f.str_val)
-                            f.str_val[0] = '\0';
-                        break;
-                    default:
-                        continue;
-                    }
-                    rec.fields.push_back(f);
-                }
-            }
+            read_fields_from_json(obj_v, rec);
             file.custom.push_back(rec);
         }
     }
@@ -839,7 +1015,14 @@ const char* __cdecl ydt_read_object_file(const char* file_path) {
     CloseHandle(hFile);
 
     object_api::ObjFile file;
-    if (!object_api::parse_obj_data(data, size, file)) {
+    DWORD first = size >= 4 ? *(DWORD*)data : 0;
+    bool parsed = false;
+    if (object_api::looks_like_legacy_magic(first)) {
+        parsed = object_api::parse_obj_data(data, size, file);
+    } else {
+        parsed = object_api::parse_real_obj_data(data, size, object_api::has_level_for_path(file_path), file);
+    }
+    if (!parsed) {
         HeapFree(GetProcessHeap(), 0, data);
         return nullptr;
     }
@@ -867,6 +1050,10 @@ int __cdecl ydt_write_object_file(const char* file_path, const char* json_data) 
     object_api::ObjFile file;
     if (!object_api::json_to_objfile(json_data, file))
         return 0;
+    if (!object_api::looks_like_legacy_magic(file.magic)) {
+        file.real_layout = true;
+        file.has_level = object_api::has_level_for_path(file_path);
+    }
 
     auto binary = object_api::objfile_to_binary(file);
     object_api::free_obj_file(file);

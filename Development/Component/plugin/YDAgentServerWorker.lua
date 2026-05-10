@@ -1931,9 +1931,6 @@ function object.read(type_name, map_path)
     if not object_path then
         return nil, extracted_from_archive_or_err
     end
-    if extracted_from_archive_or_err == true then
-        return nil, "native object parser is disabled for extracted map archive object files: " .. tostring(object_path)
-    end
     local p = YDT.ydt_read_object_file(object_path)
     if p == nil then
         return nil, "cannot read object file: " .. tostring(object_path)
@@ -1969,14 +1966,31 @@ function object.write(type_name, map_path, json_data)
     if not ot then
         return nil, "unknown object type: " .. tostring(type_name)
     end
-    local object_path, err = resolve_object_file_path(map_path, OBJ_FILES[ot + 1])
+    local object_file = OBJ_FILES[ot + 1]
+    local object_path, extracted_from_archive_or_err = resolve_object_file_for_read(map_path, object_file)
     if not object_path then
-        return nil, err
+        return nil, extracted_from_archive_or_err
     end
-    if not file_exists(object_path) then
-        return nil, "object file not extracted in current session: " .. tostring(object_path)
+    if extracted_from_archive_or_err ~= true then
+        if YDT.ydt_write_object_file(object_path, json_data) == 0 then
+            return false
+        end
+        return true
     end
-    return YDT.ydt_write_object_file(object_path, json_data) ~= 0
+    if not ok_stormlib then
+        return nil, "ffi.stormlib is unavailable for archive object writeback"
+    end
+    local map = stormlib.open(fs.path(map_path), false)
+    if not map then
+        return nil, "cannot open map archive for object writeback: " .. tostring(map_path)
+    end
+    if YDT.ydt_write_object_file(object_path, json_data) == 0 then
+        map:close()
+        return false
+    end
+    local ok = map:add_file(object_file, fs.path(object_path))
+    map:close()
+    return ok
 end
 
 function object.field_name(field_id, source)

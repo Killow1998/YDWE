@@ -66,6 +66,78 @@ static std::string write_temp(const std::vector<unsigned char>& data) {
     return std::string(tmp);
 }
 
+static std::string write_temp_named(const std::vector<unsigned char>& data, const char* name) {
+    char tmp[MAX_PATH];
+    GetTempPathA(MAX_PATH, tmp);
+    lstrcatA(tmp, name);
+    HANDLE h = CreateFileA(tmp, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE)
+        return "";
+    DWORD w;
+    WriteFile(h, data.data(), (DWORD)data.size(), &w, NULL);
+    CloseHandle(h);
+    return std::string(tmp);
+}
+
+static std::vector<unsigned char> make_real_layout_w3t() {
+    std::vector<unsigned char> out;
+    auto w32 = [&](DWORD v) {
+        for (int i = 0; i < 4; i++)
+            out.push_back((unsigned char)((v >> (i * 8)) & 0xFF));
+    };
+    auto id = [&](const char* s) {
+        for (int i = 0; i < 4; ++i)
+            out.push_back((unsigned char)(s[i] ? s[i] : 0));
+    };
+    auto z = [&](const char* s) {
+        for (const char* p = s; *p; ++p)
+            out.push_back((unsigned char)*p);
+        out.push_back(0);
+    };
+
+    w32(2);
+    w32(0);
+    w32(1);
+    id("tstr");
+    id("I004");
+    w32(2);
+    id("unam");
+    w32(3);
+    z("RealItem");
+    w32(0);
+    id("igol");
+    w32(0);
+    w32(123);
+    w32(0);
+    return out;
+}
+
+static std::vector<unsigned char> make_real_layout_w3a() {
+    std::vector<unsigned char> out;
+    auto w32 = [&](DWORD v) {
+        for (int i = 0; i < 4; i++)
+            out.push_back((unsigned char)((v >> (i * 8)) & 0xFF));
+    };
+    auto id = [&](const char* s) {
+        for (int i = 0; i < 4; ++i)
+            out.push_back((unsigned char)(s[i] ? s[i] : 0));
+    };
+
+    w32(2);
+    w32(0);
+    w32(1);
+    id("AHbz");
+    id("A000");
+    w32(1);
+    id("Hbz1");
+    w32(0);
+    w32(1);
+    w32(0);
+    w32(50);
+    w32(0);
+    return out;
+}
+
 TEST_CASE("ObjectAPI — w3u binary read", "[object][binary]") {
     auto blob = make_minimal_w3u();
     auto path = write_temp(blob);
@@ -182,4 +254,67 @@ TEST_CASE("ObjectAPI — write failure cases", "[object][error]") {
 TEST_CASE("ObjectAPI — read failure cases", "[object][error]") {
     REQUIRE(ydt_read_object_file(nullptr) == nullptr);
     REQUIRE(ydt_read_object_file("nonexistent_file_12345.w3u") == nullptr);
+
+    auto bad_tail = make_real_layout_w3t();
+    bad_tail.resize(bad_tail.size() - 1);
+    auto bad_tail_path = write_temp_named(bad_tail, "ydwe_test_bad_tail.w3t");
+    REQUIRE(!bad_tail_path.empty());
+    REQUIRE(ydt_read_object_file(bad_tail_path.c_str()) == nullptr);
+    DeleteFileA(bad_tail_path.c_str());
+
+    auto short_legacy = make_minimal_w3u();
+    short_legacy.resize(12); // truncate after header
+    auto short_path = write_temp_named(short_legacy, "ydwe_test_short.w3u");
+    REQUIRE(!short_path.empty());
+    REQUIRE(ydt_read_object_file(short_path.c_str()) == nullptr);
+    DeleteFileA(short_path.c_str());
+}
+
+TEST_CASE("ObjectAPI real object layout without level data", "[object][real]") {
+    auto blob = make_real_layout_w3t();
+    auto path = write_temp_named(blob, "ydwe_test_real_layout.w3t");
+    REQUIRE(!path.empty());
+
+    const char* json = ydt_read_object_file(path.c_str());
+    REQUIRE(json != nullptr);
+
+    std::string j(json);
+    INFO("Real w3t JSON: " << j);
+    REQUIRE(j.find("\"version\":2") != std::string::npos);
+    REQUIRE(j.find("\"id\":\"I004\"") != std::string::npos);
+    REQUIRE(j.find("\"unam\":\"RealItem\"") != std::string::npos);
+    REQUIRE(j.find("\"igol\":123") != std::string::npos);
+    REQUIRE(j.find("\"field_details\"") != std::string::npos);
+
+    REQUIRE(ydt_write_object_file(path.c_str(), json) == 1);
+    const char* json2 = ydt_read_object_file(path.c_str());
+    REQUIRE(json2 != nullptr);
+    REQUIRE(std::string(json2).find("\"id\":\"I004\"") != std::string::npos);
+
+    DeleteFileA(path.c_str());
+}
+
+TEST_CASE("ObjectAPI real object layout with level data", "[object][real][level]") {
+    auto blob = make_real_layout_w3a();
+    auto path = write_temp_named(blob, "ydwe_test_real_layout.w3a");
+    REQUIRE(!path.empty());
+
+    const char* json = ydt_read_object_file(path.c_str());
+    REQUIRE(json != nullptr);
+
+    std::string j(json);
+    INFO("Real w3a JSON: " << j);
+    REQUIRE(j.find("\"id\":\"A000\"") != std::string::npos);
+    REQUIRE(j.find("\"Hbz1\":50") != std::string::npos);
+    REQUIRE(j.find("\"level\":1") != std::string::npos);
+    REQUIRE(j.find("\"data\":0") != std::string::npos);
+
+    REQUIRE(ydt_write_object_file(path.c_str(), json) == 1);
+    const char* json2 = ydt_read_object_file(path.c_str());
+    REQUIRE(json2 != nullptr);
+    std::string j2(json2);
+    REQUIRE(j2.find("\"Hbz1\":50") != std::string::npos);
+    REQUIRE(j2.find("\"level\":1") != std::string::npos);
+
+    DeleteFileA(path.c_str());
 }

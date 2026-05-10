@@ -63,6 +63,11 @@ Q:\AppData\ydwe\YDWE\Build\publish\Debug\YDWE.exe Q:\AppData\ydwe\work\compose_d
   writeback check
 - live regression also covers reversible trigger rename and object-editor field
   metadata lookup
+- `object.read` can now extract and parse real `.w3x` archive object files
+  through the native ObjectAPI path
+- ObjectAPI preserves real object-layout metadata through `field_details`
+  (`id/type/level/data/terminator/value`) so ability/upgrade/doodad level fields
+  can roundtrip without losing structure
 - global parsing reads both `globals` and `InitGlobals`
 - provider configuration UI exists in the editor
 - AI apply flow supports snapshot/rollback
@@ -265,6 +270,12 @@ Verified in real YDWE sessions:
   listening on the target port
 - save/compile can be triggered from CLI
 - object-editor and trigger-editor changes can be materialized into real maps
+- real-map object archive reads are live-validated for `item` and `unit`
+- `object.read item Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x`
+  returned the real custom item `I003` from `war3map.w3t`, including
+  `field_details`
+- `object.read unit Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x`
+  returned real unit records from `war3map.w3u`, including `field_details`
 
 Concrete evidence from the 2026-05-09 validation pass:
 
@@ -352,12 +363,17 @@ Verified behavior of the final GUI-only compose demo:
   - YDWE's native GUI save path rewrites the LNI source directory from a temp
     marker map and can remove source-backed files such as `trigger/variable.lml`
   - use `set_global_value` directly for LNI marker globals
-- object archive read/write is guarded for real `.w3x` maps
-  - object files can be extracted from the map archive, but the current native
-    binary ObjectAPI parser is not hardened for full real-map object files
-  - `object.read` now fails safely instead of crashing the editor on extracted
-    archive files
-  - object field metadata lookup is the current live-regression P2 coverage
+- object-editor archive writeback has a map-lock boundary
+  - `object.read` is enabled for extracted real `.w3x` archive object files
+  - ObjectAPI read/write is unit-tested for legacy fixture data, real `.w3t`,
+    real `.w3a`, malformed tail data, and truncated legacy files
+  - `object.write` can write an extracted/current object file and can replace a
+    map archive object file when StormLib can open the archive in write mode
+  - when the same `.w3x` is open in WorldEdit, StormLib may refuse write-mode
+    archive open; in that case `object.write` returns a clear error before
+    mutating the cache
+  - the remaining hard part is true in-editor object-editor mutation while the
+    map archive is locked by the editor
 
 ## Next-Phase Goals
 
@@ -385,9 +401,11 @@ Verified behavior of the final GUI-only compose demo:
 
 ### P2
 
-- object-editor field metadata lookup is now part of live regression
-- next object-editor work is C++ ObjectAPI hardening for full real-map binary
-  object files before re-enabling live object archive read/write
+- object-editor field metadata lookup and real archive object reads are now part
+  of live validation
+- next object-editor work is a lock-safe in-editor write path for currently open
+  `.w3x` maps, either by locating the editor-owned object temp source or by
+  adding a save-pipeline hook that stages object replacements before packing
 - keep `docs/refactor-status.md` as the only status document
 
 ## Documentation Rule

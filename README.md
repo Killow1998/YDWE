@@ -39,7 +39,9 @@ The maintained project documentation is consolidated under
 - Agent `save_map` no-ops on LNI marker maps to avoid rewriting source-backed
   LNI directories
 - map-level global create / modify / delete
-- object-editor read / write
+- object-editor archive read for real `.w3x` object files
+- object-editor file write / archive replace when the target map archive is not
+  locked by an open editor session
 - object-editor field metadata lookup is covered in live regression
 - provider configuration UI
 - AI apply snapshot / rollback flow
@@ -128,9 +130,10 @@ The reliable regression path is `--no-launch` after the target map is visible in
 the refactor debug editor. Cold self-launch can bring the Agent online before
 native trigger/global capture is ready, so use it only for launch-path checks.
 
-Current object file read/write against real `.w3x` archive object files is
-intentionally guarded: the native binary object parser is not yet hardened for
-full real-map object files. Field metadata lookup remains available.
+Object archive reads are enabled for real `.w3x` maps. Object archive writeback
+still has a map-lock boundary: if the same map is currently open in WorldEdit,
+StormLib may refuse write-mode archive access. In that case the Agent returns a
+clear error instead of mutating its cache.
 
 ## Status Source
 
