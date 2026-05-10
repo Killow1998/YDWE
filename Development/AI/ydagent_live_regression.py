@@ -528,6 +528,42 @@ def _run_trigger_structure_regression(
             )
             _assert(got_func == temp_func, f"agent.eca_func_name({label}) verification failed")
 
+            active_before = _rpc(
+                host,
+                port,
+                "agent.eca_active",
+                [trigger_index, eca_type, new_index],
+                timeout=rpc_timeout,
+            )
+            _assert(
+                isinstance(active_before, bool),
+                f"agent.eca_active({label}) returned non-bool: {active_before!r}",
+            )
+            set_inactive = _rpc(
+                host,
+                port,
+                "agent.set_eca_active",
+                [trigger_index, eca_type, new_index, False],
+                timeout=rpc_timeout,
+            )
+            _assert(set_inactive is True, f"agent.set_eca_active({label}, false) returned False")
+            got_inactive = _rpc(
+                host,
+                port,
+                "agent.eca_active",
+                [trigger_index, eca_type, new_index],
+                timeout=rpc_timeout,
+            )
+            _assert(got_inactive is False, f"agent.eca_active({label}) false verification failed")
+            restore_active = _rpc(
+                host,
+                port,
+                "agent.set_eca_active",
+                [trigger_index, eca_type, new_index, active_before],
+                timeout=rpc_timeout,
+            )
+            _assert(restore_active is True, f"agent.set_eca_active({label}) restore returned False")
+
             param_count = _rpc(
                 host,
                 port,

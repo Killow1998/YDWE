@@ -162,7 +162,9 @@ Verified working:
   state after a later operation fails
 - `ydagent_live_regression.py --check-trigger-structure` exists for real GUI
   sessions. It should be enabled after rebuilding `YDTrigger.dll` with the
-  event/condition-safe `ydt_add_eca` fix.
+  event/condition-safe `ydt_add_eca` fix. The live check covers add ECA,
+  function-name edit, active-state edit/restore, parameter edit when parameters
+  exist, remove ECA, and count restore.
 
 ### GUI-First Proof
 
