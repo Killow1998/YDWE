@@ -347,8 +347,9 @@ def main():
         elif cmd == "object_write":
             obj_type = sys.argv[2]
             map_path = sys.argv[3]
+            save_after = "--save" in sys.argv[4:]
             # Read JSON from file or stdin
-            json_path = sys.argv[4] if len(sys.argv) > 4 else None
+            json_path = next((arg for arg in sys.argv[4:] if arg != "--save"), None)
             if json_path:
                 with open(json_path, "r") as f:
                     json_data = f.read()
@@ -356,6 +357,9 @@ def main():
                 json_data = sys.stdin.read()
             result = rpc_call(host, port, "object.write", [obj_type, map_path, json_data])
             print("OK" if result else "FAIL")
+            if result and save_after:
+                save_result = rpc_call(host, port, "editor.save_map", timeout=60.0)
+                pretty(save_result)
 
         else:
             print(f"Unknown command: {cmd}")
@@ -368,7 +372,7 @@ def main():
             print(f"  clear_pending_objects [map_path|--all] [war3map.w3*]")
             print(f"  add_eca, remove_eca, set_eca_param")
             print(f"Object commands: object_read <type> <map_path>")
-            print(f"  object_write <type> <map_path> [json_file]")
+            print(f"  object_write <type> <map_path> [json_file] [--save]")
             print(f"  Types: unit, item, destructable, destructible, doodad, ability, buff, upgrade")
 
     except ConnectionRefusedError:

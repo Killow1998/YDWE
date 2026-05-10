@@ -249,6 +249,13 @@ locked can be inspected with:
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py pending_objects Q:\path\to\map.w3x
 ```
 
+For one-shot CLI usage, `object_write` can trigger the save pipeline
+immediately:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py object_write item Q:\path\to\map.w3x item.json --save
+```
+
 Clear staged object replacements after an interrupted test:
 
 ```powershell

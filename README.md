@@ -141,6 +141,8 @@ Object archive reads are enabled for real `.w3x` maps. Object writes work while
 the map is open by staging the modified `war3map.w3*` file and applying it in
 the next `save_map` pack cycle. The internal regression profile covers
 item/unit/ability string object fields plus an ability numeric object field.
+For manual CLI use, `object_write <type> <map> <json> --save` writes and then
+triggers the save pipeline.
 
 ## Status Source
 
