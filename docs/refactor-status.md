@@ -210,6 +210,29 @@ MSBuild YDWE.sln /t:Build /p:Configuration=Debug /p:Platform=Win32
 If the preflight fails, install Visual Studio 2022 Build Tools with the C++
 workload before rerunning native build/live trigger-structure verification.
 
+### 1b. Install Remote Native Artifact
+
+When the local machine does not have v143, use the successful GitHub Actions
+artifact instead. Token-based download and install:
+
+```powershell
+$env:GH_TOKEN="..."
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_fetch_native_artifact.py --install
+```
+
+Browser download and install:
+
+1. open the latest successful `YDWE Agent Native Checks` run
+2. download the `ydagent-native-debug` artifact zip
+3. install it:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_fetch_native_artifact.py --zip Q:\path\to\ydagent-native-debug.zip --install
+```
+
+The installer backs up the existing
+`Build/publish/Debug/plugin/YDTrigger.dll` before replacing it.
+
 ### 2. Launch
 
 ```powershell
