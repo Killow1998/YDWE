@@ -182,6 +182,69 @@ def run_rpc_suite(host: str, port: int, restore: bool, tui: Tui) -> None:
     context = expect("agent.compress_context", lambda: rpc_call(host, port, "agent.compress_context", [{"trigger_limit": 3, "node_limit": 3}]), tui)
     require(isinstance(context, dict), "compressed context is not an object")
 
+    for eca_type, label in [(0, "event"), (1, "condition"), (2, "action")]:
+        before_count = expect(
+            f"agent.eca_count {label}",
+            lambda eca_type=eca_type: rpc_call(host, port, "agent.eca_count", [0, eca_type]),
+            tui,
+        )
+        require(isinstance(before_count, int), f"{label} eca count is not int: {before_count!r}")
+        added = expect(
+            f"agent.add_eca {label}",
+            lambda eca_type=eca_type: rpc_call(host, port, "agent.add_eca", [0, eca_type]),
+            tui,
+        )
+        require(added is True, f"add_eca {label} failed: {added!r}")
+        new_index = before_count
+        after_add = expect(
+            f"agent.eca_count {label} after add",
+            lambda eca_type=eca_type: rpc_call(host, port, "agent.eca_count", [0, eca_type]),
+            tui,
+        )
+        require(after_add == before_count + 1, f"add_eca {label} count mismatch: {after_add!r}")
+        func_name = f"Tui{label.title()}Func"
+        set_func = expect(
+            f"agent.set_eca_func_name {label}",
+            lambda eca_type=eca_type, new_index=new_index, func_name=func_name: rpc_call(
+                host, port, "agent.set_eca_func_name", [0, eca_type, new_index, func_name]
+            ),
+            tui,
+        )
+        require(set_func is True, f"set_eca_func_name {label} failed: {set_func!r}")
+        got_func = expect(
+            f"agent.eca_func_name {label}",
+            lambda eca_type=eca_type, new_index=new_index: rpc_call(host, port, "agent.eca_func_name", [0, eca_type, new_index]),
+            tui,
+        )
+        require(got_func == func_name, f"eca func {label} mismatch: {got_func!r}")
+        param_value = f"{label}_param"
+        set_param = expect(
+            f"agent.set_eca_param_value {label}",
+            lambda eca_type=eca_type, new_index=new_index, param_value=param_value: rpc_call(
+                host, port, "agent.set_eca_param_value", [0, eca_type, new_index, 0, param_value]
+            ),
+            tui,
+        )
+        require(set_param is True, f"set_eca_param_value {label} failed: {set_param!r}")
+        got_param = expect(
+            f"agent.eca_param_value {label}",
+            lambda eca_type=eca_type, new_index=new_index: rpc_call(host, port, "agent.eca_param_value", [0, eca_type, new_index, 0]),
+            tui,
+        )
+        require(got_param == param_value, f"eca param {label} mismatch: {got_param!r}")
+        removed = expect(
+            f"agent.remove_eca {label}",
+            lambda eca_type=eca_type, new_index=new_index: rpc_call(host, port, "agent.remove_eca", [0, eca_type, new_index]),
+            tui,
+        )
+        require(removed is True, f"remove_eca {label} failed: {removed!r}")
+        after_remove = expect(
+            f"agent.eca_count {label} after remove",
+            lambda eca_type=eca_type: rpc_call(host, port, "agent.eca_count", [0, eca_type]),
+            tui,
+        )
+        require(after_remove == before_count, f"remove_eca {label} count mismatch: {after_remove!r}")
+
     schema = expect("ai.operation_schema", lambda: rpc_call(host, port, "ai.operation_schema"), tui)
     require(isinstance(schema, dict), "operation schema is not an object")
 

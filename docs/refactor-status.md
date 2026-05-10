@@ -140,6 +140,9 @@ Verified working:
 - Agent object type mapping is loopback-checked for all exposed object-editor
   types: `unit`, `item`, `destructable`/`destructible`, `doodad`, `ability`,
   `buff`, and `upgrade`
+- Agent trigger-structure editing is loopback-checked for event, condition, and
+  action ECA lists: add ECA, change function name, change parameter value,
+  remove ECA, and verify the count returns to the original value
 
 ### GUI-First Proof
 
@@ -379,6 +382,9 @@ Verified in real YDWE sessions:
   mapping checks, `object_set_field` validation for destructable objects, and
   apply-plan failure rollback coverage; it kept the stub Agent RPC baseline at
   17/17 passing
+- `ydagent_tui.py stub --port 27119` completed after adding event/condition/action
+  ECA structure-edit checks; it kept the stub Agent RPC baseline at 44/44
+  passing
 - `test_object_api.cpp` now contains real-layout roundtrip fixtures for every
   object-editor file type (`w3u`, `w3t`, `w3b`, `w3d`, `w3a`, `w3h`, `w3q`);
   rerun `YDWE_Test` in an environment with MSBuild available
