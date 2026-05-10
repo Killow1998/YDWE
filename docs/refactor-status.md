@@ -112,6 +112,9 @@ working maps without frequent manual rescue.
   object files into `logs/ydagent_pending_objects.lua`; the save pipeline copies
   staged `war3map.w3*` files into the active temp map before packing
 - global parsing reads both `globals` and `InitGlobals`
+- when the native WorldEditor global table is empty, Agent global lookup falls
+  back to `logs/currentmapscript.j` so normal `.w3x` sessions can still resolve
+  scalar globals after save/compile
 - provider configuration UI exists in the editor
 - AI apply flow supports snapshot/rollback
 
@@ -278,14 +281,14 @@ verify; LNI marker sessions use the live file-backed path.
 ### 9. Internal Usable Regression
 
 The current internal-usable baseline can self-launch YDWE, validate a copied
-test map, and close the launched session:
+test map, and close the launched session. Use `--copy-from` so the source map is
+not mutated:
 
 ```powershell
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --map Q:\AppData\ydwe\work\internal_usable_self_launch.w3x --internal-usable --close-launched --wait 60
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --copy-from Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --map Q:\AppData\ydwe\work\internal_usable_copy_from.w3x --internal-usable --close-launched --wait 60
 ```
 
-Use a copied map path for this command. It mutates and restores data, but using
-a copy keeps validation isolated from active development work.
+This command mutates and restores data on the copied target map only.
 
 For an already-open editor session, use:
 
@@ -363,6 +366,12 @@ Verified in real YDWE sessions:
   completed without manual editor setup; it launched YDWE, ran the full
   internal-usable profile, closed the launched session, and left no pending
   sidecars behind
+- `ydagent_live_regression.py --copy-from Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --map Q:\AppData\ydwe\work\internal_usable_copy_from.w3x --internal-usable --close-launched --wait 60`
+  completed as the one-command internal test; it copied the source map, launched
+  YDWE, ran the full internal-usable profile on the copy, closed the launched
+  session, and left no pending sidecars behind
+- `ydagent_tui.py stub --port 27119` completed after adding script-global
+  fallback support; it kept the stub Agent RPC baseline at 13/13 passing
 
 Concrete evidence from the 2026-05-09 validation pass:
 
@@ -439,6 +448,9 @@ Verified behavior of the final GUI-only compose demo:
 - tests must start from `YDWE.exe`
 - cold self-launch is now validated by the internal-usable profile, but it still
   requires no existing Agent on the target port and should use a copied map
+- a failed cold self-launch can leave an editor process holding the default
+  Agent port and test map lock; close that editor before rerunning the
+  one-command GUI regression, or the next run can connect to stale worker code
 - generated logs and scratch files must be cleaned after testing
 - LNI marker-map temp scripts now sanitize control bytes before Wave compile
   - this specifically masks the bad `W2L\x01` marker-name leak seen in some

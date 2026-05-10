@@ -7,6 +7,7 @@ import argparse
 import csv
 import io
 import json
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass
@@ -895,6 +896,20 @@ def _apply_internal_usable_profile(args: argparse.Namespace) -> None:
     args.check_object_field_map = _append_unique(args.check_object_field_map, ["item", "unit"])
 
 
+def _copy_regression_map(source: Path, target: Path, no_launch: bool) -> None:
+    source = source.resolve()
+    target = target.resolve()
+    if no_launch:
+        raise RegressionError("--copy-from is only supported when launching a fresh YDWE session")
+    if source == target:
+        raise RegressionError("--copy-from source and --map target must be different")
+    if not source.exists():
+        raise RegressionError(f"--copy-from source does not exist: {source}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+    print(f"PASS: copied_map source={source} target={target}")
+
+
 def _global_snapshot(
     host: str,
     port: int,
@@ -1167,6 +1182,11 @@ def main() -> int:
         help=f"map path to open (default: {_DEFAULT_MAP})",
     )
     parser.add_argument(
+        "--copy-from",
+        type=Path,
+        help="copy this source map to --map before launching YDWE; source and target must differ",
+    )
+    parser.add_argument(
         "--global-name",
         default=_DEFAULT_GLOBAL_NAME,
         help=f"global variable name to check (default: {_DEFAULT_GLOBAL_NAME})",
@@ -1268,6 +1288,9 @@ def main() -> int:
         help="terminate only the process launched by this script at shutdown",
     )
     args = parser.parse_args()
+
+    if args.copy_from is not None:
+        _copy_regression_map(args.copy_from, args.map_path, args.no_launch)
 
     if args.internal_usable:
         _apply_internal_usable_profile(args)

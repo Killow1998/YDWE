@@ -126,11 +126,12 @@ For the broader P1/P2 live regression:
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --internal-usable
 ```
 
-For the current internal-usable baseline, use a copied working map. This can
-self-launch YDWE and close the launched session:
+For the current internal-usable baseline, this copies the source map,
+self-launches YDWE, runs the profile on the copy, and closes the launched
+session:
 
 ```powershell
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --map Q:\AppData\ydwe\work\internal_usable_self_launch.w3x --internal-usable --close-launched --wait 60
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --copy-from Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --map Q:\AppData\ydwe\work\internal_usable_copy_from.w3x --internal-usable --close-launched --wait 60
 ```
 
 The reliable regression path is `--no-launch` after the target map is visible in

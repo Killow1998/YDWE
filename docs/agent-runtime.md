@@ -121,7 +121,7 @@ Real GUI verification:
 Self-launching internal baseline:
 
 ```powershell
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --map Q:\path\to\copied-map.w3x --internal-usable --close-launched --wait 60
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --copy-from Q:\path\to\source-map.w3x --map Q:\path\to\copied-map.w3x --internal-usable --close-launched --wait 60
 ```
 
 Already-open editor session:

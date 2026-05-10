@@ -915,6 +915,7 @@ local function load_script_global_types()
         return {}
     end
     local types = {}
+    local order = {}
     local in_globals = false
     local in_init_globals = false
     for line in f:lines() do
@@ -940,6 +941,9 @@ local function load_script_global_types()
             end
             local type_id = type_name and GLOBAL_TYPE_IDS[type_name]
             if type_id and name then
+                if not types[name] then
+                    order[#order + 1] = name
+                end
                 types[name] = {
                     id = type_id,
                     name = type_name,
@@ -959,7 +963,24 @@ local function load_script_global_types()
         end
     end
     f:close()
+    types.__order = order
     return types
+end
+
+local function script_global_names()
+    local types = load_script_global_types()
+    local order = types.__order
+    if type(order) == "table" then
+        return order
+    end
+    local names = {}
+    for name, _ in pairs(types) do
+        if name ~= "__order" then
+            names[#names + 1] = name
+        end
+    end
+    table.sort(names)
+    return names
 end
 
 local function current_map_path()
@@ -1460,6 +1481,10 @@ function agent.global_count()
             return #defs
         end
     end
+    local script_names = script_global_names()
+    if #script_names > 0 then
+        return #script_names
+    end
     return 0
 end
 
@@ -1477,6 +1502,21 @@ function agent.global_name(idx)
         local entry = defs and defs[idx + 1]
         return entry and entry.name or nil
     end
+    local script_names = script_global_names()
+    return script_names[idx + 1]
+end
+
+local function script_global_index(name)
+    local normalized = normalize_global_name(name)
+    if not normalized then
+        return nil
+    end
+    local script_names = script_global_names()
+    for i, current_name in ipairs(script_names) do
+        if normalize_global_name(current_name) == normalized then
+            return i - 1
+        end
+    end
     return nil
 end
 
@@ -1491,6 +1531,10 @@ function agent.global_index(name)
         if normalize_global_name(current_name) == normalized then
             return i
         end
+    end
+    local script_idx = script_global_index(name)
+    if script_idx then
+        return script_idx
     end
     return nil, "global not found: " .. tostring(name)
 end
