@@ -32,6 +32,12 @@ Q:\AppData\ydwe\YDWE\Build\publish\Debug\YDWE.exe
 Do not directly start `worldedit.exe` for Agent/runtime validation. The correct
 path is `YDWE.exe -> worldeditydwe.exe`.
 
+Direct debug startup with a bare map path is supported again:
+
+```powershell
+Q:\AppData\ydwe\YDWE\Build\publish\Debug\YDWE.exe Q:\AppData\ydwe\work\compose_demo_gui_only_v2.w3x
+```
+
 ## Delivered Capabilities
 
 ### Core Refactor
@@ -50,6 +56,8 @@ path is `YDWE.exe -> worldeditydwe.exe`.
 - `ydagent_client.py pending_globals` and `clear_pending_globals` are available
   for maintaining staged normal `.w3x` global overrides
 - name-based global lookup/write is available through Agent RPC and CLI
+- `ydagent_smoke.py --restore-global` is validated against a real normal `.w3x`
+  session after extending slow RPC timeouts
 - global parsing reads both `globals` and `InitGlobals`
 - provider configuration UI exists in the editor
 - AI apply flow supports snapshot/rollback
@@ -203,6 +211,11 @@ Verified in real YDWE sessions:
 - global names/types/values are readable
 - LNI live session global write/readback works without native memory writes
 - normal `.w3x` global write/readback works without native memory writes
+- direct `YDWE.exe <map>` launch opens the requested normal `.w3x` target in the
+  debug/refactor startup path
+- `ydagent_smoke.py --restore-global --global-name udg_compose_count --global-value 17`
+  completed against `compose_demo_gui_only_v2.w3x` and restored the original
+  value
 - save/compile can be triggered from CLI
 - object-editor and trigger-editor changes can be materialized into real maps
 

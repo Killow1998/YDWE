@@ -1,6 +1,7 @@
 #include <list>
 #include <utility>
 #include <locale>
+#include <bee/utility/path_helper.h>
 #include <windows.h>
 #include <base/filesystem.h>
 #include <base/file/memory_mapped_file.h>
@@ -114,6 +115,52 @@ static void CheckedCopyFile(const fs::path &source, const fs::path &destination)
 #endif
 }
 
+static bool is_map_path_candidate(fs::path const& path)
+{
+	return bee::path_helper::equal(path.extension(), L".w3x")
+		|| bee::path_helper::equal(path.extension(), L".w3m")
+		|| bee::path_helper::equal(path.extension(), L".w3g");
+}
+
+static void NormalizeLaunchArgs(bee::subprocess::args_t& args, int argc, wchar_t** argv)
+{
+	bool has_loadfile_flag = false;
+	bool next_is_flag_value = false;
+	bool has_normalized = false;
+
+	for (int i = 1; i < argc; ++i)
+	{
+		std::wstring arg = argv[i];
+		if (!arg.empty() && arg[0] == L'-')
+		{
+			args.push_back(arg);
+			if (!has_loadfile_flag && arg == L"-loadfile")
+			{
+				has_loadfile_flag = true;
+			}
+			next_is_flag_value = true;
+			continue;
+		}
+
+		if (next_is_flag_value)
+		{
+			args.push_back(arg);
+			continue;
+		}
+
+		if (!has_loadfile_flag && !has_normalized && is_map_path_candidate(arg))
+		{
+			args.push_back(L"-loadfile");
+			args.push_back(arg);
+			next_is_flag_value = true;
+			has_normalized = true;
+			continue;
+		}
+
+		args.push_back(arg);
+	}
+}
+
 //
 // see http://blogs.msdn.com/b/shawnfa/archive/2009/06/08/more-implicit-uses-of-cas-policy-loadfromremotesources.aspx
 //
@@ -197,11 +244,8 @@ static void DoTask()
 	int argc = 0;
 	wchar_t** argv = ::CommandLineToArgvW(::GetCommandLineW(), &argc);
     bee::subprocess::args_t args;
-    args.resize(argc);
-	for (int i = 0; i < argc; ++i) {
-		args[i] = argv[i];
-	}
-	args[0] = worldeditPreferredPath.wstring();
+	args.push_back(worldeditPreferredPath.wstring());
+	NormalizeLaunchArgs(args, argc, argv);
 
 	if (!worldedit_process.exec(args, 0)) {
 		throw bee::make_syserror(_("ERROR_LAUNCH_WE"));

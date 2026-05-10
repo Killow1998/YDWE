@@ -20,13 +20,21 @@ from ydagent_client import (
     rpc_call,
 )
 
+_RPC_TIMEOUT_DEFAULT = 10.0
+_RPC_TIMEOUT_SLOW = 60.0
 
 class SmokeError(RuntimeError):
     pass
 
 
-def _rpc(host: str, port: int, method: str, params: list[Any] | None = None) -> Any:
-    return rpc_call(host, port, method, params or [])
+def _rpc(
+    host: str,
+    port: int,
+    method: str,
+    params: list[Any] | None = None,
+    timeout: float = _RPC_TIMEOUT_DEFAULT,
+) -> Any:
+    return rpc_call(host, port, method, params or [], timeout=timeout)
 
 
 def _wait_for_server(host: str, port: int, wait_seconds: float, interval_seconds: float) -> dict[str, Any]:
@@ -128,9 +136,9 @@ def _run_global_restore_cycle(
         global_touched = True
 
         if not is_lni_marker_path(map_path):
-            save_result = _rpc(host, port, "editor.save_map", [])
+            save_result = _rpc(host, port, "editor.save_map", [], timeout=60.0)
             _assert(isinstance(save_result, dict), f"editor.save_map returned {save_result!r}")
-            wait_for_server(host, port, 30.0, 0.5)
+            _wait_for_server(host, port, 30.0, 0.5)
 
         after_write = _rpc(host, port, "agent.global_value", [original["index"]])
         _assert(
@@ -149,11 +157,13 @@ def _run_global_restore_cycle(
                     restore_errors.append("global restore write returned False")
                 else:
                     if not is_lni_marker_path(map_path):
-                        save_result = _rpc(host, port, "editor.save_map", [])
+                        save_result = _rpc(
+                            host, port, "editor.save_map", [], timeout=60.0
+                        )
                         if not isinstance(save_result, dict):
                             restore_errors.append(f"editor.save_map returned {save_result!r}")
                         else:
-                            wait_for_server(host, port, 30.0, 0.5)
+                            _wait_for_server(host, port, 30.0, 0.5)
 
                     if not restore_errors:
                         after_restore = _rpc(host, port, "agent.global_value", [original["index"]])
@@ -193,7 +203,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
     refresh_count = _rpc(args.host, args.port, "agent.refresh")
     triggers = _rpc(args.host, args.port, "agent.list_triggers") or []
-    globals_list = _rpc(args.host, args.port, "agent.list_globals") or []
+    globals_list = _rpc(
+        args.host, args.port, "agent.list_globals", timeout=_RPC_TIMEOUT_SLOW
+    ) or []
     _assert(isinstance(triggers, list), "agent.list_triggers returned non-list")
     _assert(isinstance(globals_list, list), "agent.list_globals returned non-list")
 

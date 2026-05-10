@@ -15,6 +15,8 @@ The maintained project documentation is consolidated under
 
 - Visual Studio 2022 / `v143` / C++20 build path
 - working `YDWE.exe` launch path for runtime verification
+- direct `YDWE.exe <map.w3x>` launch now normalizes to `-loadfile <map>` in the
+  refactor startup path
 - stable `YDTrigger` debug build
 
 ### Agent and Editor Integration
@@ -80,6 +82,12 @@ Q:\AppData\ydwe\YDWE\Build\publish\Debug\YDWE.exe
 ```
 
 Do not directly start `worldedit.exe` for Agent/runtime validation.
+
+To open a target map directly through the debug startup path:
+
+```powershell
+Q:\AppData\ydwe\YDWE\Build\publish\Debug\YDWE.exe Q:\AppData\ydwe\work\compose_demo_gui_only_v2.w3x
+```
 
 ## Minimal Verification
 
