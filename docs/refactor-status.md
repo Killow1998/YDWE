@@ -29,6 +29,9 @@ rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_build_preflight.py --buil
 On the current machine this preflight finds only MSBuild 12.0 and fails with
 `v143 toolset not found`; native source changes are therefore committed but not
 rebuilt into the local `Build/publish/Debug` runtime yet.
+- `.github/workflows/ydagent-native.yml` runs the same preflight, focused native
+  build, Python syntax checks, and Agent stub loopback on GitHub
+  `windows-2022`, which has the correct VS2022/v143 toolchain available.
 
 ### Runtime Baseline
 
@@ -431,6 +434,9 @@ Verified in real YDWE sessions:
 - `ydagent_build_preflight.py` now makes the native build prerequisite explicit.
   On this machine it reports only `C:\Program Files (x86)\MSBuild\12.0\Bin\MSBuild.exe`
   and fails because the v143 toolset is not installed.
+- `ydagent-native.yml` is available as a remote native gate for environments
+  where VS2022/v143 is present. It verifies `YDTrigger.vcxproj`,
+  `YDWE_Test.vcxproj`, and the `ydagent_tui.py` stub loopback.
 - `test_object_api.cpp` now contains real-layout roundtrip fixtures for every
   object-editor file type (`w3u`, `w3t`, `w3b`, `w3d`, `w3a`, `w3h`, `w3q`);
   rerun `YDWE_Test` in an environment with MSBuild available

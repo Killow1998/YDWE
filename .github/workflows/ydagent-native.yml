@@ -1,0 +1,36 @@
+name: YDWE Agent Native Checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  native-agent:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Python syntax checks
+        shell: pwsh
+        run: |
+          python -m py_compile `
+            Development\AI\ydagent_build_preflight.py `
+            Development\AI\ydagent_live_regression.py `
+            Development\AI\ydagent_tui.py
+
+      - name: Native build preflight and focused build
+        shell: pwsh
+        run: |
+          python Development\AI\ydagent_build_preflight.py --build-ydtrigger --build-tests
+
+      - name: Agent stub loopback
+        shell: pwsh
+        run: |
+          python Development\AI\ydagent_tui.py stub --port 27119
