@@ -38,6 +38,45 @@ Direct debug startup with a bare map path is supported again:
 Q:\AppData\ydwe\YDWE\Build\publish\Debug\YDWE.exe Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x
 ```
 
+## Internal Usable Milestone
+
+Goal: make `ydwe-refactor` stable enough for internal map development on copied
+working maps without frequent manual rescue.
+
+### Acceptance Criteria
+
+- one documented debug build/run path works from a clean checkout on the current
+  machine
+- one documented live regression command verifies the current standard test map
+  without manual clicks after the map is visible in `YDWE.exe`
+- the regression command covers:
+  - `editor.save_map`
+  - scalar global write/restore for integer, real, boolean, and string
+  - pending global clear behavior
+  - trigger rename/restore
+  - object archive read
+  - object write/save/readback/restore for at least item and unit
+- all generated pending sidecars are inspectable from CLI and are cleared after
+  successful save/restore
+- failures must be explicit:
+  - no silent cache-only object writes
+  - no silent pending sidecar corruption
+  - no direct `worldedit.exe` launch in validation docs
+- docs stay centralized:
+  - `docs/refactor-status.md` is the only status source
+  - `README.md` only contains the user-facing summary and common commands
+- internal users can safely start from a copied `.w3x`, run Agent edits, run the
+  regression command, and know whether the map is still valid
+
+### Non-Goals For This Milestone
+
+- polished public UI
+- full Release installer
+- array global writes
+- direct native runtime global-memory writes
+- complete GUI trigger AST editing for every ECA shape
+- exhaustive object-editor coverage for every field in every object type
+
 ## Delivered Capabilities
 
 ### Core Refactor
@@ -209,6 +248,13 @@ locked can be inspected with:
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py pending_objects Q:\path\to\map.w3x
 ```
 
+Clear staged object replacements after an interrupted test:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py clear_pending_objects Q:\path\to\map.w3x war3map.w3t
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py clear_pending_objects --all
+```
+
 ### 8. Reversible Global Smoke
 
 Run a live-session reversible scalar global check by name:
@@ -247,7 +293,7 @@ editor process. Use `--no-launch` for the current session.
 Broader P1/P2 regression:
 
 ```powershell
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="p1_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear --check-trigger-rename --trigger-index 0 --check-object-field-map item --check-object-field-map unit --check-object-read item --check-object-write item
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="p1_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear --check-trigger-rename --trigger-index 0 --check-object-field-map item --check-object-field-map unit --check-object-read item --check-object-read unit --check-object-write item --check-object-write unit
 ```
 
 ## Verified Results
@@ -290,6 +336,13 @@ Verified in real YDWE sessions:
   completed against an open editor session; it mutated item `unam`, staged the
   object file while the archive was locked, saved through the editor, verified
   readback, restored the original object JSON, and saved again
+- `ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\internal_usable_regression.w3x --check-object-write item --check-object-write unit`
+  completed against an open editor session; item `unam` and unit `uabi` were
+  mutated, saved, verified, restored, and saved again
+- `ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\internal_usable_regression.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="internal_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear --check-trigger-rename --trigger-index 0 --check-object-field-map item --check-object-field-map unit --check-object-read item --check-object-read unit --check-object-write item --check-object-write unit`
+  completed as the internal-usable baseline; it covered save, four scalar
+  global types, pending global clear, reversible trigger rename, item/unit
+  object archive reads, item/unit staged object writes, and item/unit field maps
 
 Concrete evidence from the 2026-05-09 validation pass:
 

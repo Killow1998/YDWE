@@ -704,6 +704,28 @@ local function pending_object_overrides_for(map_path)
     return data[map_key] or {}
 end
 
+local function clear_pending_object_overrides_for(map_path, object_file)
+    local data = load_pending_object_overrides()
+    if map_path == nil or map_path == "" or map_path == "*" then
+        return save_pending_object_overrides({})
+    end
+
+    local map_key = normalize_map_key(map_path)
+    if not map_key then
+        return nil, "map path is required"
+    end
+
+    if object_file == nil or object_file == "" or object_file == "*" then
+        data[map_key] = nil
+    elseif type(data[map_key]) == "table" then
+        data[map_key][tostring(object_file)] = nil
+        if next(data[map_key]) == nil then
+            data[map_key] = nil
+        end
+    end
+    return save_pending_object_overrides(data)
+end
+
 local function register_pending_object_override(map_path, object_file, cache_path, type_name)
     local map_key = normalize_map_key(map_path)
     if not map_key then
@@ -1630,6 +1652,13 @@ function agent.list_pending_objects(map_path)
         map_path = "*"
     end
     return pending_object_overrides_for(map_path)
+end
+
+function agent.clear_pending_objects(map_path, object_file)
+    if map_path == nil or map_path == "" then
+        map_path = "*"
+    end
+    return clear_pending_object_overrides_for(map_path, object_file)
 end
 
 local function read_eca_list(idx, eca_type)

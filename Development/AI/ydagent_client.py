@@ -265,6 +265,16 @@ def main():
             result = rpc_call(host, port, "agent.list_pending_objects", [map_path])
             pretty(result)
 
+        elif cmd == "clear_pending_objects":
+            map_path = sys.argv[2] if len(sys.argv) > 2 else "*"
+            if map_path == "--all":
+                map_path = "*"
+            object_file = sys.argv[3] if len(sys.argv) > 3 else "*"
+            result = rpc_call(
+                host, port, "agent.clear_pending_objects", [map_path, object_file]
+            )
+            print("OK" if result else "FAIL")
+
         elif cmd == "clear_pending_globals":
             map_path = sys.argv[2] if len(sys.argv) > 2 else "*"
             if map_path == "--all":
@@ -355,6 +365,7 @@ def main():
             print(f"  set_global_value_by_name, create_global, delete_global")
             print(f"  pending_globals [map_path], pending_objects [map_path]")
             print(f"  clear_pending_globals [map_path|--all] [global_name]")
+            print(f"  clear_pending_objects [map_path|--all] [war3map.w3*]")
             print(f"  add_eca, remove_eca, set_eca_param")
             print(f"Object commands: object_read <type> <map_path>")
             print(f"  object_write <type> <map_path> [json_file]")

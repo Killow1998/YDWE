@@ -520,6 +520,30 @@ def _set_object_field(record: dict[str, Any], field_id: str, value: str) -> None
     })
 
 
+def _pick_string_object_field(records: list[dict[str, Any]]) -> tuple[dict[str, Any], str, str] | None:
+    candidates: list[tuple[int, dict[str, Any], str, str]] = []
+    preferred = {"unam", "anam", "gnam", "fnam"}
+    for record in records:
+        fields = record.get("fields")
+        if not isinstance(fields, dict):
+            continue
+        for field_id, value in fields.items():
+            if not isinstance(field_id, str) or not isinstance(value, str):
+                continue
+            if field_id in preferred:
+                rank = 0
+            elif value != "":
+                rank = 1
+            else:
+                rank = 2
+            candidates.append((rank, record, field_id, value))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[0])
+    _rank, record, field_id, value = candidates[0]
+    return record, field_id, value
+
+
 def _run_object_write_regression(
     host: str,
     port: int,
@@ -535,16 +559,9 @@ def _run_object_write_regression(
     records = _object_records(original)
     _assert(records, f"object.write({object_type}) has no records to mutate")
 
-    target_record = None
-    field_id = "unam"
-    original_value = None
-    for record in records:
-        fields = record.get("fields")
-        if isinstance(fields, dict) and isinstance(fields.get(field_id), str):
-            target_record = record
-            original_value = fields[field_id]
-            break
-    _assert(target_record is not None, f"object.write({object_type}) found no string {field_id} field")
+    picked = _pick_string_object_field(records)
+    _assert(picked is not None, f"object.write({object_type}) found no string field")
+    target_record, field_id, original_value = picked
 
     marker = f"{original_value}_YDAGENT_OBJECT_WRITE"
     mutated = json.loads(json.dumps(original, ensure_ascii=False))
