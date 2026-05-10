@@ -513,6 +513,10 @@ function M.operation_schema()
     return ops.schema()
 end
 
+function M.template_plan(template_name, args)
+    return ops.template_plan(template_name, args)
+end
+
 M.configure("local", {})
 
 return M

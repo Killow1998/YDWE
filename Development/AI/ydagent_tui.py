@@ -281,6 +281,55 @@ def run_rpc_suite(host: str, port: int, restore: bool, tui: Tui) -> None:
     usage_contract = schema.get("usage_contract")
     require(isinstance(usage_contract, list) and usage_contract, "operation schema missing usage_contract")
 
+    template_plan = expect(
+        "ai.template_plan quest.create",
+        lambda: rpc_call(
+            host,
+            port,
+            "ai.template_plan",
+            [
+                "quest.create",
+                {
+                    "trigger_index": 0,
+                    "quest_global": "udg_TuiQuest",
+                    "title": "TUI Quest",
+                    "description": "Created by semantic template",
+                    "icon_path": "ReplaceableTextures\\CommandButtons\\BTNSelectHeroOn.blp",
+                },
+            ],
+        ),
+        tui,
+    )
+    require(isinstance(template_plan, dict), "template_plan result is not an object")
+    require(template_plan.get("ok") is True, f"template_plan failed: {template_plan!r}")
+    require(template_plan.get("template") == "quest.create", f"template_plan template mismatch: {template_plan!r}")
+    require(isinstance(template_plan.get("plan"), dict), f"template_plan missing plan: {template_plan!r}")
+    require(len(template_plan["plan"].get("operations", [])) >= 2, f"template_plan operations missing: {template_plan!r}")
+
+    template_apply = expect(
+        "ai.apply_template dry-run",
+        lambda: rpc_call(
+            host,
+            port,
+            "ai.apply_template",
+            [
+                "timer_window.countdown",
+                {
+                    "trigger_index": 0,
+                    "timer_global": "udg_TuiTimer",
+                    "timer_dialog_global": "udg_TuiTimerDialog",
+                    "duration_seconds": 30,
+                    "title": "TUI Countdown",
+                },
+                {"dry_run": True},
+            ],
+        ),
+        tui,
+    )
+    require(isinstance(template_apply, dict), "apply_template dry-run result is not an object")
+    require(template_apply.get("template") == "timer_window.countdown", f"apply_template template mismatch: {template_apply!r}")
+    require(isinstance(template_apply.get("preview"), list) and template_apply["preview"], f"apply_template preview missing: {template_apply!r}")
+
     dry_run = expect(
         "ai.apply_plan dry-run",
         lambda: rpc_call(host, port, "ai.apply_plan", [{"operations": [{"op": "set_trigger_disabled", "trigger_index": 0, "disabled": False}]}, {"dry_run": True}]),

@@ -20,7 +20,7 @@ local OBJECT_TYPES = {
 local SEMANTIC_TEMPLATES = {
     {
         name = "quest.create",
-        status = "planned",
+        status = "rpc",
         category = "quest",
         purpose = "Create a GUI quest object and store its handle in a global variable.",
         required_globals = { "quest" },
@@ -29,7 +29,7 @@ local SEMANTIC_TEMPLATES = {
     },
     {
         name = "quest.complete_when",
-        status = "planned",
+        status = "rpc",
         category = "quest",
         purpose = "Evaluate a GUI condition and mark a quest or quest item complete.",
         required_globals = { "quest", "questitem" },
@@ -38,7 +38,7 @@ local SEMANTIC_TEMPLATES = {
     },
     {
         name = "creep_spawn.periodic",
-        status = "planned",
+        status = "rpc",
         category = "spawn",
         purpose = "Create periodic neutral hostile creep spawns in a region with count caps.",
         required_globals = { "rect", "group", "timer", "integer" },
@@ -47,7 +47,7 @@ local SEMANTIC_TEMPLATES = {
     },
     {
         name = "leaderboard.create_or_update",
-        status = "planned",
+        status = "rpc",
         category = "ui",
         purpose = "Create a GUI leaderboard and update player rows from integer globals.",
         required_globals = { "leaderboard", "integer" },
@@ -56,7 +56,7 @@ local SEMANTIC_TEMPLATES = {
     },
     {
         name = "timer_window.countdown",
-        status = "planned",
+        status = "rpc",
         category = "ui",
         purpose = "Create a timer, attach a timer dialog, start it, and run timeout actions.",
         required_globals = { "timer", "timerdialog" },
@@ -65,7 +65,7 @@ local SEMANTIC_TEMPLATES = {
     },
     {
         name = "dialog.choice",
-        status = "planned",
+        status = "rpc",
         category = "ui",
         purpose = "Create a GUI dialog with buttons and route clicked-button responses.",
         required_globals = { "dialog", "button" },
@@ -253,6 +253,18 @@ validators.add_eca = function(op)
         end
         cleaned.func = func
     end
+    if op.params ~= nil then
+        if type(op.params) ~= "table" then
+            return nil, "params must be an array when provided"
+        end
+        cleaned.params = {}
+        for i, value in ipairs(op.params) do
+            if not primitive(value) then
+                return nil, "params entries must be string, number, or boolean"
+            end
+            cleaned.params[i] = tostring(value)
+        end
+    end
     return cleaned
 end
 
@@ -380,10 +392,201 @@ function M.schema()
         usage_contract = {
             "Return operations only; never mutate map files outside ai.apply_plan or documented CLI helpers.",
             "Prefer semantic templates from docs/agent-gui-api.md for gameplay systems instead of hand-picking random GUI function names.",
-            "If a semantic template is still planned, compile it into the existing low-level operations and verify every emitted ECA after save_map.",
+            "Use ai.template_plan or ai.apply_template for semantic templates, then verify every emitted ECA after save_map.",
             "Do not call remove_eca unless allow_non_recoverable=true is intentionally set and the caller accepts that rollback cannot restore the removed GUI node.",
         },
         safety = "Return operations only. Do not apply changes directly. High-risk operations require user review. remove_eca is non-rollback-safe and requires allow_non_recoverable=true when applying.",
+    }
+end
+
+local function require_template_arg(args, name)
+    local value = args and args[name]
+    if value == nil or value == "" then
+        return nil, name .. " is required"
+    end
+    return value
+end
+
+local function template_trigger_index(args)
+    local idx = args and (args.trigger_index or args.triggerIndex)
+    if not is_integer(idx, 0) then
+        return nil, "trigger_index must be a non-negative integer"
+    end
+    return idx
+end
+
+local function action(trigger_index, func, params)
+    return {
+        op = "add_eca",
+        trigger_index = trigger_index,
+        eca_type = 2,
+        func = func,
+        params = params or {},
+    }
+end
+
+local function event(trigger_index, func, params)
+    return {
+        op = "add_eca",
+        trigger_index = trigger_index,
+        eca_type = 0,
+        func = func,
+        params = params or {},
+    }
+end
+
+local function condition(trigger_index, func, params)
+    return {
+        op = "add_eca",
+        trigger_index = trigger_index,
+        eca_type = 1,
+        func = func,
+        params = params or {},
+    }
+end
+
+local template_builders = {}
+
+template_builders["quest.create"] = function(args)
+    local trigger_index, err = template_trigger_index(args)
+    if not trigger_index then return nil, err end
+    local quest_global; quest_global, err = require_template_arg(args, "quest_global")
+    if not quest_global then return nil, err end
+    local title; title, err = require_template_arg(args, "title")
+    if not title then return nil, err end
+    local description = args.description or ""
+    local icon_path = args.icon_path or args.iconPath or ""
+    local required = args.required ~= false
+    return {
+        summary = "Create GUI quest",
+        operations = {
+            action(trigger_index, "CreateQuestBJ", { tostring(required), title, description, icon_path }),
+            action(trigger_index, "SetVariable", { quest_global, "GetLastCreatedQuestBJ" }),
+        },
+    }
+end
+
+template_builders["quest.complete_when"] = function(args)
+    local trigger_index, err = template_trigger_index(args)
+    if not trigger_index then return nil, err end
+    local quest_global; quest_global, err = require_template_arg(args, "quest_global")
+    if not quest_global then return nil, err end
+    local condition_func = args.condition_func or args.conditionFunc
+    local condition_params = args.condition_params or args.conditionParams or {}
+    local operations = {}
+    if condition_func then
+        operations[#operations + 1] = condition(trigger_index, condition_func, condition_params)
+    end
+    operations[#operations + 1] = action(trigger_index, "QuestSetCompletedBJ", { quest_global, "true" })
+    if args.message and args.message ~= "" then
+        operations[#operations + 1] = action(trigger_index, "DisplayTimedTextToForce", { "GetPlayersAll()", tostring(args.message), tostring(args.duration or 10) })
+    end
+    return {
+        summary = "Complete GUI quest from condition",
+        operations = operations,
+    }
+end
+
+template_builders["creep_spawn.periodic"] = function(args)
+    local trigger_index, err = template_trigger_index(args)
+    if not trigger_index then return nil, err end
+    local region_global; region_global, err = require_template_arg(args, "region_global")
+    if not region_global then return nil, err end
+    local unit_id; unit_id, err = require_template_arg(args, "unit_id")
+    if not unit_id then return nil, err end
+    return {
+        summary = "Create periodic creep spawn GUI trigger",
+        operations = {
+            event(trigger_index, "TriggerRegisterTimerEventPeriodic", { tostring(args.interval_seconds or 30) }),
+            condition(trigger_index, "CountLivingPlayerUnitsOfTypeId", { unit_id, tostring(args.owner_player or "Player(PLAYER_NEUTRAL_AGGRESSIVE)"), "<", tostring(args.max_alive or 12) }),
+            action(trigger_index, "CreateNUnitsAtLoc", { tostring(args.spawn_count or 1), unit_id, tostring(args.owner_player or "Player(PLAYER_NEUTRAL_AGGRESSIVE)"), region_global }),
+        },
+    }
+end
+
+template_builders["leaderboard.create_or_update"] = function(args)
+    local trigger_index, err = template_trigger_index(args)
+    if not trigger_index then return nil, err end
+    local leaderboard_global; leaderboard_global, err = require_template_arg(args, "leaderboard_global")
+    if not leaderboard_global then return nil, err end
+    local title = args.title or "Score"
+    local operations = {
+        action(trigger_index, "CreateLeaderboardBJ", { "GetPlayersAll()", title }),
+        action(trigger_index, "SetVariable", { leaderboard_global, "GetLastCreatedLeaderboard()" }),
+    }
+    for _, row in ipairs(args.rows or {}) do
+        operations[#operations + 1] = action(trigger_index, "LeaderboardAddItemBJ", {
+            leaderboard_global,
+            tostring(row.label or row.player or "Player"),
+            tostring(row.value_global or row.valueGlobal or "0"),
+            tostring(row.player or "Player(0)"),
+        })
+    end
+    operations[#operations + 1] = action(trigger_index, "LeaderboardDisplayBJ", { tostring(args.display ~= false), leaderboard_global })
+    return {
+        summary = "Create or update GUI leaderboard",
+        operations = operations,
+    }
+end
+
+template_builders["timer_window.countdown"] = function(args)
+    local trigger_index, err = template_trigger_index(args)
+    if not trigger_index then return nil, err end
+    local timer_global; timer_global, err = require_template_arg(args, "timer_global")
+    if not timer_global then return nil, err end
+    local timer_dialog_global; timer_dialog_global, err = require_template_arg(args, "timer_dialog_global")
+    if not timer_dialog_global then return nil, err end
+    return {
+        summary = "Create countdown timer window",
+        operations = {
+            action(trigger_index, "CreateTimerBJ", { tostring(args.duration_seconds or 60), "false" }),
+            action(trigger_index, "SetVariable", { timer_global, "GetLastCreatedTimerBJ()" }),
+            action(trigger_index, "CreateTimerDialogBJ", { timer_global, tostring(args.title or "Countdown") }),
+            action(trigger_index, "SetVariable", { timer_dialog_global, "GetLastCreatedTimerDialogBJ()" }),
+            event(trigger_index, "TriggerRegisterTimerExpireEventBJ", { timer_global }),
+        },
+    }
+end
+
+template_builders["dialog.choice"] = function(args)
+    local trigger_index, err = template_trigger_index(args)
+    if not trigger_index then return nil, err end
+    local dialog_global; dialog_global, err = require_template_arg(args, "dialog_global")
+    if not dialog_global then return nil, err end
+    local operations = {
+        action(trigger_index, "DialogSetMessageBJ", { dialog_global, tostring(args.message or "") }),
+    }
+    for _, button in ipairs(args.buttons or {}) do
+        local text = tostring(button.text or button.label or "Option")
+        local global = button.global or button.button_global or button.buttonGlobal
+        operations[#operations + 1] = action(trigger_index, "DialogAddButtonBJ", { dialog_global, text })
+        if global then
+            operations[#operations + 1] = action(trigger_index, "SetVariable", { global, "GetLastCreatedButtonBJ()" })
+            operations[#operations + 1] = event(trigger_index, "TriggerRegisterDialogButtonEventBJ", { global })
+        end
+    end
+    operations[#operations + 1] = action(trigger_index, "DialogDisplayBJ", { tostring(args.player or "Player(0)"), dialog_global, "true" })
+    return {
+        summary = "Create GUI dialog choice flow",
+        operations = operations,
+    }
+end
+
+function M.template_plan(template_name, args)
+    local builder = template_builders[template_name]
+    if not builder then
+        return nil, "unsupported template: " .. tostring(template_name)
+    end
+    local plan, err = builder(args or {})
+    if not plan then
+        return nil, err
+    end
+    local validation = M.validate_plan(plan)
+    return {
+        ok = validation.ok,
+        template = template_name,
+        plan = plan,
+        validation = validation,
     }
 end
 

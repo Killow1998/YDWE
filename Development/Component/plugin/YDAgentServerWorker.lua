@@ -2298,6 +2298,8 @@ local function snapshot_operation(op, options)
             eca_type = op.eca_type,
             before = agent.eca_count(op.trigger_index, op.eca_type),
             after = (agent.eca_count(op.trigger_index, op.eca_type) or 0) + 1,
+            func = op.func,
+            params = op.params,
         }
     elseif op.op == "remove_eca" then
         local count = agent.eca_count(op.trigger_index, op.eca_type) or 0
@@ -2418,6 +2420,14 @@ local function apply_operation(op, options)
         local ok = agent.add_eca(op.trigger_index, op.eca_type)
         if ok and op.func then
             ok = agent.set_eca_func_name(op.trigger_index, op.eca_type, new_index, op.func)
+        end
+        if ok and type(op.params) == "table" then
+            for i, value in ipairs(op.params) do
+                ok = agent.set_eca_param_value(op.trigger_index, op.eca_type, new_index, i - 1, value)
+                if not ok then
+                    return false, "failed to set added ECA param " .. tostring(i - 1)
+                end
+            end
         end
         return ok
     elseif op.op == "remove_eca" then
@@ -2590,8 +2600,32 @@ function ai_rpc.operation_schema()
     return ai.operation_schema()
 end
 
+function ai_rpc.template_plan(template_name, args)
+    return ai.template_plan(template_name, args)
+end
+
 function ai_rpc.apply_plan(plan, options)
     return apply_plan(plan, options)
+end
+
+function ai_rpc.apply_template(template_name, args, options)
+    local compiled, err = ai.template_plan(template_name, args)
+    if not compiled then
+        return nil, err
+    end
+    if not compiled.validation or compiled.validation.ok ~= true then
+        return {
+            ok = false,
+            template = template_name,
+            plan = compiled.plan,
+            validation = compiled.validation,
+            error = "template validation failed",
+        }
+    end
+    local result = apply_plan(compiled.plan, options)
+    result.template = template_name
+    result.template_plan = compiled.plan
+    return result
 end
 
 function ai_rpc.queue_review(plan)

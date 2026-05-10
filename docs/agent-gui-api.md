@@ -6,8 +6,9 @@ This document defines how agents must edit real WorldEditor GUI content in
 ## Contract
 
 - Use `ai.operation_schema` before generating a plan.
-- Apply changes through `ai.apply_plan`; do not directly patch map files for GUI
-  trigger work unless a documented helper explicitly says so.
+- Apply GUI gameplay templates through `ai.apply_template`; use
+  `ai.template_plan` for preview/dry-run. Use `ai.apply_plan` only for the
+  stable low-level operations listed below.
 - Use semantic templates for gameplay systems. Do not invent raw GUI function
   names or parameter layouts from memory.
 - Verify every non-trivial map edit with `editor.save_map` and a loopback read.
@@ -41,20 +42,29 @@ These are exposed by `ai.operation_schema` and are currently executable through
 
 ## Semantic Template Status
 
-The runtime schema exposes these template names so future agents can discover
-the intended API surface. Templates marked `planned` are not a promise that a
-single high-level RPC already exists; until promoted to `stable`, an agent must
-compile the template into the stable low-level operations above and verify the
-generated GUI ECA list.
+The runtime schema exposes these template names and `ai.template_plan` /
+`ai.apply_template` compile them into low-level GUI ECA operations. Agents must
+call these RPCs for the listed gameplay systems instead of hand-building random
+function/parameter layouts.
 
 | Template | Status | Use Case |
 | --- | --- | --- |
-| `quest.create` | planned | Create a quest, set title/description/icon, store handle. |
-| `quest.complete_when` | planned | Mark a quest or quest item complete from a GUI condition. |
-| `creep_spawn.periodic` | planned | Periodic region-based creep spawn with a count cap. |
-| `leaderboard.create_or_update` | planned | Create and update a leaderboard from globals. |
-| `timer_window.countdown` | planned | Create a timer, timer dialog, and expire trigger. |
-| `dialog.choice` | planned | Create a dialog, add buttons, and handle selections. |
+| `quest.create` | rpc | Create a quest, set title/description/icon, store handle. |
+| `quest.complete_when` | rpc | Mark a quest or quest item complete from a GUI condition. |
+| `creep_spawn.periodic` | rpc | Periodic region-based creep spawn with a count cap. |
+| `leaderboard.create_or_update` | rpc | Create and update a leaderboard from globals. |
+| `timer_window.countdown` | rpc | Create a timer, timer dialog, and expire trigger. |
+| `dialog.choice` | rpc | Create a dialog, add buttons, and handle selections. |
+
+RPCs:
+
+```text
+ai.template_plan(template_name, args)
+ai.apply_template(template_name, args, options)
+```
+
+`ai.apply_template` accepts the same options as `ai.apply_plan`, including
+`dry_run`, `confirm`, and rollback behavior.
 
 ## Template Requirements
 
@@ -209,7 +219,8 @@ For a real map edit:
 
 ```powershell
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py rpc ai.operation_schema
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py rpc ai.validate_plan '<plan-json>'
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py rpc ai.template_plan '<template-name>' '<args-json>'
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py rpc ai.apply_template '<template-name>' '<args-json>' '{"dry_run":true}'
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_client.py save_map
 ```
 
@@ -221,10 +232,11 @@ rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_tui.py stub --port 27119
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --copy-from Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --map Q:\AppData\ydwe\work\agent_gui_api_check.w3x --internal-usable --check-trigger-structure --close-launched --wait 60
 ```
 
-## Current Gap
+## Native Boundary
 
-The low-level GUI ECA editor is working. The semantic template names are now
-published in `ai.operation_schema`, but the high-level one-call RPCs for these
-templates are still planned. Until those RPCs are implemented, agents must use
-this document to compile semantic templates into low-level `ai.apply_plan`
-operations and verify the resulting GUI structure.
+The native ECA editor currently creates new GUI nodes by cloning an existing
+node of the same ECA type. `ai.apply_template` therefore validates and rolls
+back through `ai.apply_plan`; if a target map lacks a suitable GUI parameter
+shape for a template, the template apply fails instead of silently writing a
+partial trigger. After any successful template apply, run `editor.save_map` and
+read the ECA tree back.
