@@ -24,6 +24,7 @@ in the repo. Update this file instead.
 
 ```powershell
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_build_preflight.py --build-ydtrigger --build-tests
+rtk Build\Build_Debug.bat
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_build_preflight.py --check-runtime-exports
 ```
 
@@ -214,6 +215,17 @@ If the preflight fails, install Visual Studio 2022 Build Tools with the C++
 workload before rerunning native build/live trigger-structure verification.
 Do not treat trigger-structure GUI validation as available until
 `--check-runtime-exports` passes against the local Debug runtime DLL.
+
+The local non-CI publish path is:
+
+- source project: `Development/Plugin/WE/YDTrigger/YDTrigger.vcxproj`
+- build entry: `Build/Build_Debug.bat`
+- development output: `Development/Build/bin/Debug/plugin/YDTrigger.dll`
+- runtime output: `Build/publish/Debug/plugin/YDTrigger.dll`
+
+`Development/Build/bin/Debug/plugin/YDTrigger.dll` and
+`Build/publish/Debug/plugin/YDTrigger.dll` must both come from the same fresh
+build before live GUI trigger-structure validation is meaningful.
 
 ### 2. Launch
 
@@ -546,6 +558,9 @@ Verified behavior of the final GUI-only compose demo:
   requires v143. Forcing `PlatformToolset=v120` also fails because the bundled
   Catch2 headers use newer C++ syntax, so native C++ test changes must be built
   on a machine with the v143 toolset
+- the local non-CI publish path is `Build/Build_Debug.bat`, which copies
+  `Development/Build/bin/Debug/...` into `Build/publish/Debug/...`; this path
+  is valid only after v143 is available
 - forcing `YDTrigger.vcxproj` to `PlatformToolset=v120` also fails before the
   DLL build reaches YDTrigger sources, because `bee.lua` dependency sources use
   C inline syntax unsupported by that toolchain; the native ECA fix needs a v143
