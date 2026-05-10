@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <vector>
 #include <BlizzardStorm.h>
+#include "AgentAPI.h"
 #include "Common.h"
 #include "Core/CC_GUIID.h"
 #include "Core/CC_VarType.h"

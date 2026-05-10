@@ -479,8 +479,9 @@ Verified behavior of the final GUI-only compose demo:
 - `--copy-from` now reports locked target-map copy failures as explicit
   regression errors instead of leaking a Python traceback
 - the current machine only has MSBuild 12.0/v120 installed; `YDWE_Test.vcxproj`
-  requires v143, so native C++ test changes must be built on a machine with the
-  v143 toolset
+  requires v143. Forcing `PlatformToolset=v120` also fails because the bundled
+  Catch2 headers use newer C++ syntax, so native C++ test changes must be built
+  on a machine with the v143 toolset
 - generated logs and scratch files must be cleaned after testing
 - LNI marker-map temp scripts now sanitize control bytes before Wave compile
   - this specifically masks the bad `W2L\x01` marker-name leak seen in some
