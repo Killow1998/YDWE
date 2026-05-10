@@ -1039,6 +1039,7 @@ def _run_object_numeric_write_regression(
 def _is_missing_object_fixture_error(exc: Exception) -> bool:
     text = str(exc)
     markers = (
+        "object file not found in map archive",
         "has no records to mutate",
         "found no string field",
         "found no numeric field",
@@ -1063,7 +1064,7 @@ def _run_all_object_write_regression(
                 rpc_timeout,
                 save_timeout,
             )
-        except RegressionError as exc:
+        except Exception as exc:
             if not _is_missing_object_fixture_error(exc):
                 raise
             print(f"SKIP: object_write type={object_type} reason={exc}")
@@ -1086,7 +1087,7 @@ def _run_all_object_numeric_write_regression(
                 rpc_timeout,
                 save_timeout,
             )
-        except RegressionError as exc:
+        except Exception as exc:
             if not _is_missing_object_fixture_error(exc):
                 raise
             print(f"SKIP: object_numeric_write type={object_type} reason={exc}")

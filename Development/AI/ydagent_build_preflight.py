@@ -33,6 +33,37 @@ def _candidate_msbuilds() -> list[Path]:
         if path.exists():
             candidates.append(path)
 
+    vswhere_roots = [
+        Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe",
+        Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe",
+    ]
+    for vswhere in vswhere_roots:
+        if not vswhere.exists():
+            continue
+        try:
+            result = subprocess.run(
+                [
+                    str(vswhere),
+                    "-latest",
+                    "-products",
+                    "*",
+                    "-requires",
+                    "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                    "-property",
+                    "installationPath",
+                ],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+        except OSError:
+            continue
+        for line in result.stdout.splitlines():
+            install = Path(line.strip())
+            if install:
+                candidates.append(install / "MSBuild" / "Current" / "Bin" / "MSBuild.exe")
+
     roots = [
         Path(os.environ.get("ProgramFiles", r"C:\Program Files")),
         Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")),
@@ -62,6 +93,9 @@ def _has_v143(msbuild: Path) -> bool:
         toolset = parent / "Microsoft.Cpp" / "v4.0" / "V143" / "Microsoft.Cpp.Platform.targets"
         if toolset.exists():
             return True
+        vc170 = parent / "MSBuild" / "Microsoft" / "VC" / "v170" / "Microsoft.Cpp.Default.props"
+        if vc170.exists():
+            return True
     roots = [
         Path(os.environ.get("ProgramFiles", r"C:\Program Files")),
         Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")),
@@ -79,6 +113,7 @@ def _run(msbuild: Path, project: Path) -> int:
         "/t:Build",
         "/p:Configuration=Debug",
         "/p:Platform=Win32",
+        "/p:PlatformToolset=v143",
     ]
     print("RUN: " + " ".join(cmd))
     return subprocess.call(cmd, cwd=ROOT)

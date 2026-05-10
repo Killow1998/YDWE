@@ -28,11 +28,9 @@ rtk Build\Build_Debug.bat
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_build_preflight.py --check-runtime-exports
 ```
 
-On the current machine this preflight finds only MSBuild 12.0 and fails with
-`v143 toolset not found`; native source changes are therefore committed but not
-rebuilt into the local `Build/publish/Debug` runtime yet. The runtime export
-check is separate and fails if the local `YDTrigger.dll` is still an old build
-that does not contain the refactor Agent exports.
+On the current machine the native build path uses the VS2022 installation found
+by `vswhere`. `ydagent_build_preflight.py --check-runtime-exports` must pass
+before any real GUI trigger-structure validation is trusted.
 
 ### Runtime Baseline
 
@@ -463,16 +461,25 @@ Verified in real YDWE sessions:
   event node, and the source fix now restricts the `CommentString` safe clone to
   action inserts only. Rebuild with v143 before treating live trigger-structure
   coverage as complete.
-- `ydagent_build_preflight.py` now makes the native build prerequisite explicit.
-  On this machine it reports only `C:\Program Files (x86)\MSBuild\12.0\Bin\MSBuild.exe`
-  and fails because the v143 toolset is not installed.
-- `ydagent_build_preflight.py --check-runtime-exports` checks the local Debug
-  runtime `YDTrigger.dll` directly. On this machine it currently fails because
-  the DLL is an old build missing `ydt_get_eca_active`; this is the active
-  blocker for real GUI trigger-structure validation.
+- `ydagent_build_preflight.py` now uses `vswhere` to find VS2022 installations
+  outside `Program Files`, passes `PlatformToolset=v143` to MSBuild, then
+  checks the local Debug runtime `YDTrigger.dll` exports directly.
+- `ydagent_build_preflight.py --build-ydtrigger --build-tests` passes on the
+  current machine with `Q:\Apps\VisualStudioProfessional2022\MSBuild\Current\Bin\MSBuild.exe`.
+- `ydagent_build_preflight.py --check-runtime-exports` passes after rebuilding
+  `YDTrigger.dll`; the current Debug runtime exports all required Agent native
+  functions, including `ydt_get_eca_active`.
+- `Build\bin\Debug\test\YDWE_Test.exe` passes: 269 assertions in 22 test cases.
+- `ydagent_live_regression.py --copy-from Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --map Q:\AppData\ydwe\work\goal_regression_full_2.w3x --internal-usable --check-trigger-structure --check-object-write-all --check-object-numeric-write-all --close-launched --wait 60`
+  completed against a self-launched real GUI session. It verified scalar global
+  restore, pending clear, trigger rename, event/condition/action ECA
+  add/edit/restore, canonical object type mapping, item/unit/ability object
+  read/write, ability/unit numeric object write, all field maps, and skipped
+  only object archive files absent from the demo map (`w3b`, `w3d`, `w3h`,
+  `w3q`).
 - `test_object_api.cpp` now contains real-layout roundtrip fixtures for every
   object-editor file type (`w3u`, `w3t`, `w3b`, `w3d`, `w3a`, `w3h`, `w3q`);
-  rerun `YDWE_Test` in an environment with MSBuild available
+  this is covered by the current passing `YDWE_Test` run
 
 Concrete evidence from the 2026-05-09 validation pass:
 
@@ -554,17 +561,9 @@ Verified behavior of the final GUI-only compose demo:
   one-command GUI regression, or the next run can connect to stale worker code
 - `--copy-from` now reports locked target-map copy failures as explicit
   regression errors instead of leaking a Python traceback
-- the current machine only has MSBuild 12.0/v120 installed; `YDWE_Test.vcxproj`
-  requires v143. Forcing `PlatformToolset=v120` also fails because the bundled
-  Catch2 headers use newer C++ syntax, so native C++ test changes must be built
-  on a machine with the v143 toolset
 - the local non-CI publish path is `Build/Build_Debug.bat`, which copies
   `Development/Build/bin/Debug/...` into `Build/publish/Debug/...`; this path
-  is valid only after v143 is available
-- forcing `YDTrigger.vcxproj` to `PlatformToolset=v120` also fails before the
-  DLL build reaches YDTrigger sources, because `bee.lua` dependency sources use
-  C inline syntax unsupported by that toolchain; the native ECA fix needs a v143
-  rebuild before live GUI verification can pass
+  requires a VS2022/v143 toolchain discovered by `vswhere`
 - run `ydagent_build_preflight.py --build-ydtrigger --build-tests` before any
   claim that native trigger-structure changes are available in the local runtime
 - run `ydagent_build_preflight.py --check-runtime-exports` after rebuilding to
