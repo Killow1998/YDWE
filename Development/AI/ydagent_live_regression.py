@@ -347,6 +347,157 @@ def _pending_entries_for_map(host: str, port: int, map_path: str, rpc_timeout: f
     return pending
 
 
+def _build_temporary_trigger_name(original_name: str, trigger_index: int) -> str:
+    marker = f"__AI_RENAME_{trigger_index}_{int(time.time() * 1000)}"
+    max_len = 255
+    if len(marker) >= max_len:
+        return marker[:max_len]
+    base = original_name if original_name else f"trigger_{trigger_index}"
+    suffix = f"_{marker}"
+    limit = max_len - len(suffix)
+    if limit <= 0:
+        return marker[:max_len]
+    return f"{base[:limit]}{suffix}"
+
+
+def _run_trigger_rename_regression(
+    host: str,
+    port: int,
+    trigger_index: int,
+    rpc_timeout: float,
+) -> None:
+    triggers = _rpc(host, port, "agent.list_triggers", timeout=rpc_timeout)
+    _assert(isinstance(triggers, list), "agent.list_triggers returned non-list")
+    _assert(
+        0 <= trigger_index < len(triggers),
+        f"trigger index out of range: {trigger_index} (count={len(triggers)})",
+    )
+
+    original_trigger_name = _rpc(
+        host,
+        port,
+        "agent.trigger_name",
+        [trigger_index],
+        timeout=rpc_timeout,
+    )
+    _assert(
+        isinstance(original_trigger_name, str) and original_trigger_name != "",
+        "agent.trigger_name returned empty value",
+    )
+
+    temporary_name = _build_temporary_trigger_name(original_trigger_name, trigger_index)
+    mutated = False
+    body_error: Exception | None = None
+    restore_errors: list[str] = []
+
+    try:
+        set_ok = _rpc(
+            host,
+            port,
+            "agent.set_trigger_name",
+            [trigger_index, temporary_name],
+            timeout=rpc_timeout,
+        )
+        _assert(set_ok is True, "agent.set_trigger_name returned False")
+        mutated = True
+
+        verify = _rpc(
+            host,
+            port,
+            "agent.trigger_name",
+            [trigger_index],
+            timeout=rpc_timeout,
+        )
+        _assert(verify == temporary_name, "trigger rename verification failed")
+        print(
+            f"PASS: trigger_rename_set index={trigger_index} "
+            f"temp_name={temporary_name}"
+        )
+    except Exception as exc:  # noqa: BLE001
+        body_error = exc
+    finally:
+        if mutated:
+            try:
+                restore_ok = _rpc(
+                    host,
+                    port,
+                    "agent.set_trigger_name",
+                    [trigger_index, original_trigger_name],
+                    timeout=rpc_timeout,
+                )
+                if restore_ok is not True:
+                    restore_errors.append("restore trigger rename returned False")
+                else:
+                    restored = _rpc(
+                        host,
+                        port,
+                        "agent.trigger_name",
+                        [trigger_index],
+                        timeout=rpc_timeout,
+                    )
+                    if restored != original_trigger_name:
+                        restore_errors.append("restore trigger name mismatch")
+            except Exception as exc:
+                restore_errors.append(f"restore trigger rename error: {exc}")
+
+    if restore_errors:
+        if body_error is not None:
+            raise RegressionError(f"{body_error}; {'; '.join(restore_errors)}")
+        raise RegressionError("; ".join(restore_errors))
+    if body_error is not None:
+        raise body_error
+
+    print(
+        f"PASS: trigger_rename_restore index={trigger_index} "
+        f"original_name={original_trigger_name}"
+    )
+
+
+def _run_object_read_check(
+    host: str,
+    port: int,
+    object_type: str,
+    map_path: str,
+    rpc_timeout: float,
+) -> None:
+    result = _rpc(
+        host,
+        port,
+        "object.read",
+        [object_type, map_path],
+        timeout=rpc_timeout,
+    )
+    if isinstance(result, str):
+        try:
+            result = json.loads(result)
+        except Exception as exc:
+            raise RegressionError(f"object.read({object_type}) returned non-JSON string: {exc}")
+
+    _assert(isinstance(result, (dict, list)), f"object.read({object_type}) returned non-object payload")
+    count = len(result)
+    _assert(count > 0, f"object.read({object_type}) returned empty data")
+    print(f"PASS: object_read type={object_type} count={count}")
+
+
+def _run_object_field_map_check(
+    host: str,
+    port: int,
+    object_type: str,
+    rpc_timeout: float,
+) -> None:
+    result = _rpc(
+        host,
+        port,
+        "object.field_map",
+        [object_type],
+        timeout=rpc_timeout,
+    )
+    _assert(isinstance(result, (dict, list)), f"object.field_map({object_type}) returned non-object payload")
+    count = len(result)
+    _assert(count > 0, f"object.field_map({object_type}) returned empty data")
+    print(f"PASS: object_field_map type={object_type} count={count}")
+
+
 def _list_scalar_globals(host: str, port: int, rpc_timeout: float) -> list[str]:
     globals_list = _rpc(host, port, "agent.list_globals", timeout=rpc_timeout)
     _assert(isinstance(globals_list, list), "agent.list_globals returned non-list")
@@ -646,6 +797,34 @@ def run(args: argparse.Namespace) -> LaunchedSession | None:
             args.save_timeout,
         )
 
+    if args.check_trigger_rename:
+        _run_trigger_rename_regression(
+            args.host,
+            args.port,
+            args.trigger_index,
+            args.rpc_timeout,
+        )
+
+    if args.check_object_read:
+        map_path = _read_current_map_path(args.host, args.port)
+        for object_type in args.check_object_read:
+            _run_object_read_check(
+                args.host,
+                args.port,
+                object_type,
+                map_path,
+                args.rpc_timeout,
+            )
+
+    if args.check_object_field_map:
+        for object_type in args.check_object_field_map:
+            _run_object_field_map_check(
+                args.host,
+                args.port,
+                object_type,
+                args.rpc_timeout,
+            )
+
     return launched
 
 
@@ -685,6 +864,29 @@ def main() -> int:
         "--check-pending-clear",
         action="store_true",
         help="run pending global clear/restore regression on current map",
+    )
+    parser.add_argument(
+        "--check-trigger-rename",
+        action="store_true",
+        help="rename one trigger, verify, and restore on current map",
+    )
+    parser.add_argument(
+        "--check-object-read",
+        action="append",
+        metavar="TYPE",
+        help="read object data without mutating; repeatable for multiple types",
+    )
+    parser.add_argument(
+        "--check-object-field-map",
+        action="append",
+        metavar="TYPE",
+        help="read object-editor field metadata without mutating; repeatable for multiple types",
+    )
+    parser.add_argument(
+        "--trigger-index",
+        type=int,
+        default=0,
+        help="trigger index for --check-trigger-rename (default: 0)",
     )
     parser.add_argument(
         "--host",

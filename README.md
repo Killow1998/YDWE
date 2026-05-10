@@ -30,7 +30,8 @@ The maintained project documentation is consolidated under
 - scalar global-value validation for integer / real / boolean / string defaults
 - name-based global lookup/write through Agent RPC and CLI
 - live regression harness for map launch/session verification, save/compile,
-  reversible scalar global writeback, and pending global override cleanup
+  reversible scalar global writeback, pending global override cleanup,
+  reversible trigger rename, and object-editor field metadata checks
 - LNI-session live global write + immediate readback
 - normal `.w3x` scalar global write + save/compile + reopen readback
 - LNI temp-script save failures caused by leaked control bytes are sanitized at
@@ -39,6 +40,7 @@ The maintained project documentation is consolidated under
   LNI directories
 - map-level global create / modify / delete
 - object-editor read / write
+- object-editor field metadata lookup is covered in live regression
 - provider configuration UI
 - AI apply snapshot / rollback flow
 
@@ -116,9 +118,19 @@ For the P0 scalar/pending regression set:
 rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="p0_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear
 ```
 
+For the broader P1/P2 live regression:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="p1_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear --check-trigger-rename --trigger-index 0 --check-object-field-map item --check-object-field-map unit
+```
+
 The reliable regression path is `--no-launch` after the target map is visible in
 the refactor debug editor. Cold self-launch can bring the Agent online before
 native trigger/global capture is ready, so use it only for launch-path checks.
+
+Current object file read/write against real `.w3x` archive object files is
+intentionally guarded: the native binary object parser is not yet hardened for
+full real-map object files. Field metadata lookup remains available.
 
 ## Status Source
 

@@ -61,6 +61,8 @@ Q:\AppData\ydwe\YDWE\Build\publish\Debug\YDWE.exe Q:\AppData\ydwe\work\compose_d
 - `ydagent_live_regression.py` can launch or attach to a debug YDWE session,
   verify the loaded map, run `save_map`, and perform a reversible scalar global
   writeback check
+- live regression also covers reversible trigger rename and object-editor field
+  metadata lookup
 - global parsing reads both `globals` and `InitGlobals`
 - provider configuration UI exists in the editor
 - AI apply flow supports snapshot/rollback
@@ -82,6 +84,7 @@ Verified working:
 - smoke harness can perform reversible scalar global validation by name in the
   current live session
 - read / write object-editor fields
+- object-editor field metadata can be queried safely through Agent RPC
 - save / compile from CLI through the live editor session
 
 ### GUI-First Proof
@@ -226,6 +229,12 @@ rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --map 
 If an Agent is already listening, the launch mode fails before opening another
 editor process. Use `--no-launch` for the current session.
 
+Broader P1/P2 regression:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="p1_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear --check-trigger-rename --trigger-index 0 --check-object-field-map item --check-object-field-map unit
+```
+
 ## Verified Results
 
 ### Live Session
@@ -248,6 +257,10 @@ Verified in real YDWE sessions:
   completed against the current live session; integer/string/real/boolean
   scalar writeback restored cleanly, and pending override single-clear/all-clear
   both passed
+- `ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="p1_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear --check-trigger-rename --trigger-index 0 --check-object-field-map item --check-object-field-map unit`
+  completed against the current live session; trigger rename restored to
+  `begin`, object field metadata returned for item and unit, globals restored,
+  and pending sidecar remained empty
 - default launch mode refuses to start another editor while an Agent is already
   listening on the target port
 - save/compile can be triggered from CLI
@@ -339,6 +352,12 @@ Verified behavior of the final GUI-only compose demo:
   - YDWE's native GUI save path rewrites the LNI source directory from a temp
     marker map and can remove source-backed files such as `trigger/variable.lml`
   - use `set_global_value` directly for LNI marker globals
+- object archive read/write is guarded for real `.w3x` maps
+  - object files can be extracted from the map archive, but the current native
+    binary ObjectAPI parser is not hardened for full real-map object files
+  - `object.read` now fails safely instead of crashing the editor on extracted
+    archive files
+  - object field metadata lookup is the current live-regression P2 coverage
 
 ## Next-Phase Goals
 
@@ -358,13 +377,17 @@ Verified behavior of the final GUI-only compose demo:
 
 ### P1
 
-- harden fresh-session verification so normal `.w3x` and LNI marker writeback can
-  be revalidated automatically
+- trigger rename is now part of the live regression harness and verified
+  reversible on the GUI-only demo map
+- fresh-session verification is still limited by cold native trigger/global
+  capture; the reliable automated path remains `--no-launch` after map load
 - keep GUI-trigger-first test cases as the primary proof path
 
 ### P2
 
-- extend real edit coverage with more object/trigger/global scenarios
+- object-editor field metadata lookup is now part of live regression
+- next object-editor work is C++ ObjectAPI hardening for full real-map binary
+  object files before re-enabling live object archive read/write
 - keep `docs/refactor-status.md` as the only status document
 
 ## Documentation Rule

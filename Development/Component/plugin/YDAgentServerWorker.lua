@@ -37,6 +37,8 @@ end
 
 local field_map = require "YDAgentFieldMap"
 local ai = require "YDAgentAI"
+local fs = require "bee.filesystem"
+local ok_stormlib, stormlib = pcall(require, "ffi.stormlib")
 
 local PORT = rawget(_G, "YDAGENT_PORT") or 27118
 local DLL_PATH = rawget(_G, "YDAGENT_DLL_PATH") or "YDTrigger.dll"
@@ -335,7 +337,7 @@ clear_apply_approvals()
 clear_review_queue()
 
 local function json_escape(s)
-    return (s:gsub('[%c\\\"]', {
+    local replacements = {
         ['\b'] = '\\b',
         ['\f'] = '\\f',
         ['\n'] = '\\n',
@@ -343,7 +345,10 @@ local function json_escape(s)
         ['\t'] = '\\t',
         ['\\'] = '\\\\',
         ['\"'] = '\\"',
-    }))
+    }
+    return (s:gsub('[%c\\\"]', function(ch)
+        return replacements[ch] or string.format("\\u%04X", ch:byte())
+    end))
 end
 
 function json.encode(v)
@@ -1842,12 +1847,97 @@ end
 
 local object = {}
 
+local function resolve_object_file_path(map_path, object_file)
+    local temp_dir, err = resolve_map_temp_dir(map_path)
+    if not temp_dir then
+        return nil, err
+    end
+    return path_join(temp_dir, object_file)
+end
+
+local function file_exists(path)
+    local f = io.open(path, "rb")
+    if not f then
+        return false
+    end
+    f:close()
+    return true
+end
+
+local function ensure_dir(path)
+    if not path or path == "" then
+        return
+    end
+    os.execute('mkdir "' .. path .. '" >nul 2>nul')
+end
+
+local function sanitize_filename(text)
+    text = tostring(text or "map")
+    text = text:gsub("^[A-Za-z]:", "")
+    text = text:gsub("[/\\:%*%?\"<>|%s]+", "_")
+    if text == "" then
+        return "map"
+    end
+    return text
+end
+
+local function object_cache_path(map_path, object_file)
+    local root = COMPONENT_ROOT
+    if root == "" then
+        root = "."
+    end
+    local dir = path_join(path_join(root, "logs\\ydagent_object_cache"), sanitize_filename(map_path))
+    ensure_dir(dir)
+    return path_join(dir, object_file)
+end
+
+local function resolve_object_file_for_read(map_path, object_file)
+    local object_path, err = resolve_object_file_path(map_path, object_file)
+    if not object_path then
+        return nil, err
+    end
+    if file_exists(object_path) then
+        return object_path, false
+    end
+    if not ok_stormlib then
+        return nil, "object file not extracted and ffi.stormlib is unavailable: " .. tostring(object_path)
+    end
+    if type(map_path) ~= "string" or map_path == "" or map_path:match("%.w3x[Tt]emp[\\/]?$") then
+        return nil, "object file not extracted in current session: " .. tostring(object_path)
+    end
+
+    local cache_path = object_cache_path(map_path, object_file)
+    local map = stormlib.open(fs.path(map_path), true)
+    if not map then
+        return nil, "cannot open map archive for object file: " .. tostring(map_path)
+    end
+    local ok = false
+    if map:has_file(object_file) then
+        ok = map:extract(object_file, fs.path(cache_path))
+    end
+    map:close()
+    if ok and file_exists(cache_path) then
+        return cache_path, true
+    end
+    return nil, "object file not found in map archive: " .. tostring(object_file)
+end
+
 function object.read(type_name, map_path)
     local ot = OBJ_TYPES[type_name]
     if not ot then
         return nil, "unknown object type: " .. tostring(type_name)
     end
-    local p = YDT.ydt_read_object_file(path_join(map_path, OBJ_FILES[ot + 1]))
+    local object_path, extracted_from_archive_or_err = resolve_object_file_for_read(map_path, OBJ_FILES[ot + 1])
+    if not object_path then
+        return nil, extracted_from_archive_or_err
+    end
+    if extracted_from_archive_or_err == true then
+        return nil, "native object parser is disabled for extracted map archive object files: " .. tostring(object_path)
+    end
+    local p = YDT.ydt_read_object_file(object_path)
+    if p == nil then
+        return nil, "cannot read object file: " .. tostring(object_path)
+    end
     return to_str(p)
 end
 
@@ -1879,7 +1969,14 @@ function object.write(type_name, map_path, json_data)
     if not ot then
         return nil, "unknown object type: " .. tostring(type_name)
     end
-    return YDT.ydt_write_object_file(path_join(map_path, OBJ_FILES[ot + 1]), json_data) ~= 0
+    local object_path, err = resolve_object_file_path(map_path, OBJ_FILES[ot + 1])
+    if not object_path then
+        return nil, err
+    end
+    if not file_exists(object_path) then
+        return nil, "object file not extracted in current session: " .. tostring(object_path)
+    end
+    return YDT.ydt_write_object_file(object_path, json_data) ~= 0
 end
 
 function object.field_name(field_id, source)
