@@ -20,6 +20,15 @@ in the repo. Update this file instead.
 - Win32 + `v143`
 - C++20
 - `Build/lua/make.lua` already targets the current toolset
+- run the native-build preflight before treating C++/DLL changes as verified:
+
+```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_build_preflight.py --build-ydtrigger --build-tests
+```
+
+On the current machine this preflight finds only MSBuild 12.0 and fails with
+`v143 toolset not found`; native source changes are therefore committed but not
+rebuilt into the local `Build/publish/Debug` runtime yet.
 
 ### Runtime Baseline
 
@@ -169,8 +178,12 @@ Generation helper:
 ### 1. Build
 
 ```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_build_preflight.py --build-ydtrigger --build-tests
 MSBuild YDWE.sln /t:Build /p:Configuration=Debug /p:Platform=Win32
 ```
+
+If the preflight fails, install Visual Studio 2022 Build Tools with the C++
+workload before rerunning native build/live trigger-structure verification.
 
 ### 2. Launch
 
@@ -394,6 +407,9 @@ Verified in real YDWE sessions:
   event node, and the source fix now restricts the `CommentString` safe clone to
   action inserts only. Rebuild with v143 before treating live trigger-structure
   coverage as complete.
+- `ydagent_build_preflight.py` now makes the native build prerequisite explicit.
+  On this machine it reports only `C:\Program Files (x86)\MSBuild\12.0\Bin\MSBuild.exe`
+  and fails because the v143 toolset is not installed.
 - `test_object_api.cpp` now contains real-layout roundtrip fixtures for every
   object-editor file type (`w3u`, `w3t`, `w3b`, `w3d`, `w3a`, `w3h`, `w3q`);
   rerun `YDWE_Test` in an environment with MSBuild available
@@ -486,6 +502,8 @@ Verified behavior of the final GUI-only compose demo:
   DLL build reaches YDTrigger sources, because `bee.lua` dependency sources use
   C inline syntax unsupported by that toolchain; the native ECA fix needs a v143
   rebuild before live GUI verification can pass
+- run `ydagent_build_preflight.py --build-ydtrigger --build-tests` before any
+  claim that native trigger-structure changes are available in the local runtime
 - generated logs and scratch files must be cleaned after testing
 - LNI marker-map temp scripts now sanitize control bytes before Wave compile
   - this specifically masks the bad `W2L\x01` marker-name leak seen in some
@@ -533,6 +551,9 @@ Verified behavior of the final GUI-only compose demo:
 
 - trigger rename is now part of the live regression harness and verified
   reversible on the GUI-only demo map
+- trigger ECA structure editing has stub coverage for event/condition/action
+  add, function edit, parameter edit, remove, and rollback, but real GUI coverage
+  is blocked until `YDTrigger.dll` is rebuilt with the v143 toolset
 - fresh-session verification is still limited by cold native trigger/global
   capture; the reliable automated path remains `--no-launch` after map load
 - keep GUI-trigger-first test cases as the primary proof path

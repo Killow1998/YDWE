@@ -18,6 +18,8 @@ The maintained project documentation is consolidated under
 - direct `YDWE.exe <map.w3x>` launch now normalizes to `-loadfile <map>` in the
   refactor startup path
 - stable `YDTrigger` debug build
+- native-build preflight for checking local MSBuild/v143 availability before
+  claiming C++ changes are live in `Build/publish/Debug`
 
 ### Agent and Editor Integration
 
@@ -76,8 +78,12 @@ or stub calls:
 ## Build
 
 ```powershell
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_build_preflight.py --build-ydtrigger --build-tests
 MSBuild YDWE.sln /t:Build /p:Configuration=Debug /p:Platform=Win32
 ```
+
+If the preflight reports `v143 toolset not found`, install Visual Studio 2022
+Build Tools with the C++ workload before rebuilding native DLLs.
 
 ## Run
 
