@@ -293,7 +293,7 @@ editor process. Use `--no-launch` for the current session.
 Broader P1/P2 regression:
 
 ```powershell
-rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --check-global udg_compose_count=17 --check-global udg_compose_stage="p1_stage" --check-global udg_compose_ratio=2.75 --check-global udg_compose_enabled=false --check-pending-clear --check-trigger-rename --trigger-index 0 --check-object-field-map item --check-object-field-map unit --check-object-read item --check-object-read unit --check-object-read ability --check-object-write item --check-object-write unit --check-object-write ability
+rtk python Q:\AppData\ydwe\YDWE\Development\AI\ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\compose_demo_gui_only_v3.w3x --internal-usable
 ```
 
 ## Verified Results
@@ -346,6 +346,10 @@ Verified in real YDWE sessions:
 - `ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\internal_usable_regression_ext.w3x --check-global udg_compose_count=17 --check-object-read item --check-object-read unit --check-object-read ability --check-object-write item --check-object-write unit --check-object-write ability`
   completed as extended object-editor coverage; item `unam`, unit `uabi`, and
   ability `anam` were staged, saved, verified, restored, and saved again
+- `ydagent_live_regression.py --no-launch --map Q:\AppData\ydwe\work\internal_usable_profile.w3x --internal-usable`
+  completed as the short-form internal-usable profile; it expands to scalar
+  global checks, pending clear, trigger rename, item/unit/ability object
+  read/write, and item/unit field-map checks
 
 Concrete evidence from the 2026-05-09 validation pass:
 

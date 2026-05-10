@@ -40,6 +40,14 @@ _DEFAULT_GLOBAL_NAME = "udg_compose_count"
 _DEFAULT_GLOBAL_VALUE = "17"
 _DEFAULT_RPC_TIMEOUT = 60.0
 
+_INTERNAL_USABLE_GLOBALS = [
+    "udg_compose_count=17",
+    'udg_compose_stage="internal_stage"',
+    "udg_compose_ratio=2.75",
+    "udg_compose_enabled=false",
+]
+_INTERNAL_USABLE_OBJECTS = ["item", "unit", "ability"]
+
 
 def _assert(cond: bool, message: str) -> None:
     if not cond:
@@ -750,6 +758,23 @@ def _build_pending_value(info: dict[str, Any], index: int) -> Any:
     return f"pending_value_{index + 1}"
 
 
+def _append_unique(values: list[str] | None, additions: list[str]) -> list[str]:
+    result = list(values or [])
+    for item in additions:
+        if item not in result:
+            result.append(item)
+    return result
+
+
+def _apply_internal_usable_profile(args: argparse.Namespace) -> None:
+    args.check_global = _append_unique(args.check_global, _INTERNAL_USABLE_GLOBALS)
+    args.check_pending_clear = True
+    args.check_trigger_rename = True
+    args.check_object_read = _append_unique(args.check_object_read, _INTERNAL_USABLE_OBJECTS)
+    args.check_object_write = _append_unique(args.check_object_write, _INTERNAL_USABLE_OBJECTS)
+    args.check_object_field_map = _append_unique(args.check_object_field_map, ["item", "unit"])
+
+
 def _global_snapshot(
     host: str,
     port: int,
@@ -1027,6 +1052,11 @@ def main() -> int:
         help="repeatable scalar global check in the form NAME=JSON_VALUE",
     )
     parser.add_argument(
+        "--internal-usable",
+        action="store_true",
+        help="run the current internal-usable regression profile",
+    )
+    parser.add_argument(
         "--check-pending-clear",
         action="store_true",
         help="run pending global clear/restore regression on current map",
@@ -1100,6 +1130,9 @@ def main() -> int:
         help="terminate only the process launched by this script at shutdown",
     )
     args = parser.parse_args()
+
+    if args.internal_usable:
+        _apply_internal_usable_profile(args)
 
     args.global_value = parse_json_arg(args.global_value)
     args.global_checks = _collect_global_checks(args.global_name, args.global_value, args.check_global)
