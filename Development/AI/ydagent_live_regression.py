@@ -49,6 +49,16 @@ _INTERNAL_USABLE_GLOBALS = [
 ]
 _INTERNAL_USABLE_OBJECTS = ["item", "unit", "ability"]
 _ALL_OBJECT_TYPES = ["unit", "item", "destructable", "doodad", "ability", "buff", "upgrade"]
+_OBJECT_TYPE_FILES = {
+    "unit": "war3map.w3u",
+    "item": "war3map.w3t",
+    "destructable": "war3map.w3b",
+    "destructible": "war3map.w3b",
+    "doodad": "war3map.w3d",
+    "ability": "war3map.w3a",
+    "buff": "war3map.w3h",
+    "upgrade": "war3map.w3q",
+}
 
 
 def _assert(cond: bool, message: str) -> None:
@@ -633,6 +643,22 @@ def _run_trigger_structure_regression(
         )
 
 
+def _run_object_types_check(host: str, port: int, rpc_timeout: float) -> None:
+    result = _rpc(host, port, "object.types", timeout=rpc_timeout)
+    _assert(isinstance(result, list), "object.types returned non-list")
+    by_name = {
+        entry.get("name"): entry.get("file")
+        for entry in result
+        if isinstance(entry, dict)
+    }
+    for type_name, file_name in _OBJECT_TYPE_FILES.items():
+        _assert(
+            by_name.get(type_name) == file_name,
+            f"object.types missing {type_name}->{file_name}: {by_name!r}",
+        )
+    print(f"PASS: object_types count={len(result)} canonical={len(_OBJECT_TYPE_FILES)}")
+
+
 def _run_object_read_check(
     host: str,
     port: int,
@@ -1061,6 +1087,7 @@ def _apply_internal_usable_profile(args: argparse.Namespace) -> None:
     args.check_global = _append_unique(args.check_global, _INTERNAL_USABLE_GLOBALS)
     args.check_pending_clear = True
     args.check_trigger_rename = True
+    args.check_object_types = True
     args.check_object_read = _append_unique(args.check_object_read, _INTERNAL_USABLE_OBJECTS)
     args.check_object_write = _append_unique(args.check_object_write, _INTERNAL_USABLE_OBJECTS)
     args.check_object_numeric_write = _append_unique(args.check_object_numeric_write, ["ability"])
@@ -1305,6 +1332,9 @@ def run(args: argparse.Namespace) -> LaunchedSession | None:
             args.rpc_timeout,
         )
 
+    if args.check_object_types:
+        _run_object_types_check(args.host, args.port, args.rpc_timeout)
+
     if args.check_object_read:
         map_path = _read_current_map_path(args.host, args.port)
         for object_type in args.check_object_read:
@@ -1414,6 +1444,11 @@ def main() -> int:
         action="append",
         metavar="TYPE",
         help="read object data without mutating; repeatable for multiple types",
+    )
+    parser.add_argument(
+        "--check-object-types",
+        action="store_true",
+        help="verify canonical Agent object type to war3map.w3* file mapping",
     )
     parser.add_argument(
         "--check-object-write",

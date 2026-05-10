@@ -149,6 +149,9 @@ Verified working:
 - Agent object type mapping is loopback-checked for all exposed object-editor
   types: `unit`, `item`, `destructable`/`destructible`, `doodad`, `ability`,
   `buff`, and `upgrade`
+- `ydagent_live_regression.py --check-object-types` verifies the live Agent
+  canonical object-type mapping for every exposed object-editor archive file,
+  and `--internal-usable` enables this check by default
 - Agent trigger-structure editing is loopback-checked for event, condition, and
   action ECA lists: add ECA, change function name, change parameter value,
   change active state, remove ECA, and verify the count returns to the original
@@ -416,6 +419,9 @@ Verified in real YDWE sessions:
 - `ydagent_tui.py stub --port 27119` completed after adding ECA active getter
   and active-state rollback coverage; it kept the stub Agent RPC baseline at
   59/59 passing
+- `ydagent_live_regression.py --internal-usable` now includes live
+  `object.types` canonical mapping verification for all exposed object-editor
+  types before map-specific object read/write checks
 - `ydagent_live_regression.py --copy-from ... --internal-usable --close-launched`
   reached trigger structure validation in a real GUI session, exposed that the
   current built `YDTrigger.dll` adds an action node even when asked to add an
